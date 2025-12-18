@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regress/internal/config"
 	"regress/internal/storage"
 	"regress/pkg/utils"
@@ -176,7 +175,6 @@ func readDynamicJSON(path string) (storage.DB, error) {
 
 	return db, nil
 }
-
 func findDifferences(before, after storage.DB, prefix string) []Difference {
 	var diffs []Difference
 
@@ -214,34 +212,36 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 			})
 
 		default:
-			if utils.IsMap(beforeVal) && utils.IsMap(afterVal) { // Если оба значения - словари, сравниваем рекурсивно
+			if utils.IsMap(beforeVal) && utils.IsMap(afterVal) {
+				// Если оба значения - словари, сравниваем рекурсивно
 				beforeMap, _ := beforeVal.(map[string]interface{})
 				afterMap, _ := afterVal.(map[string]interface{})
 				nestedDiffs := findDifferences(beforeMap, afterMap, fullKey)
 				diffs = append(diffs, nestedDiffs...)
 			} else if utils.IsSlice(beforeVal) && utils.IsSlice(afterVal) {
 				// Если оба значения - срезы/массивы, сравниваем поэлементно
-				beforeSlice := reflect.ValueOf(beforeVal)
-				afterSlice := reflect.ValueOf(afterVal)
+				beforeSlice, _ := beforeVal.([]interface{})
+				afterSlice, _ := afterVal.([]interface{})
 
 				// Сравниваем по максимальной длине
-				maxLen := beforeSlice.Len()
-				if afterSlice.Len() > maxLen {
-					maxLen = afterSlice.Len()
+				maxLen := len(beforeSlice)
+				if len(afterSlice) > maxLen {
+					maxLen = len(afterSlice)
 				}
+
 				for i := 0; i < maxLen; i++ {
 					elementKey := fmt.Sprintf("%s[%d]", fullKey, i)
 
 					var beforeElem, afterElem interface{}
 					var beforeElemExists, afterElemExists bool
 
-					if i < beforeSlice.Len() {
-						beforeElem = beforeSlice.Index(i).Interface()
+					if i < len(beforeSlice) {
+						beforeElem = beforeSlice[i]
 						beforeElemExists = true
 					}
 
-					if i < afterSlice.Len() {
-						afterElem = afterSlice.Index(i).Interface()
+					if i < len(afterSlice) {
+						afterElem = afterSlice[i]
 						afterElemExists = true
 					}
 
@@ -257,7 +257,7 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 							Before: nil,
 							After:  afterElem,
 						})
-					} else if !reflect.DeepEqual(beforeElem, afterElem) {
+					} else if !utils.IsEqual(beforeElem, afterElem) {
 						// Рекурсивно сравниваем элементы если они сложные
 						if utils.IsMap(beforeElem) && utils.IsMap(afterElem) {
 							beforeMap, _ := beforeElem.(map[string]interface{})
@@ -279,21 +279,19 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 						}
 					}
 				}
-			} else if !reflect.DeepEqual(beforeVal, afterVal) { // Для всех остальных типов используем DeepEqual
-				diffs = append(diffs,
-					Difference{
-						Field:  fullKey,
-						Before: beforeVal,
-						After:  afterVal,
-					},
-				)
+			} else if !utils.IsEqual(beforeVal, afterVal) {
+				// Для всех остальных типов используем isEqual
+				diffs = append(diffs, Difference{
+					Field:  fullKey,
+					Before: beforeVal,
+					After:  afterVal,
+				})
 			}
 		}
 	}
 
 	return diffs
 }
-
 func countChanged(comparisons []Comparison) int {
 	count := 0
 	for _, comp := range comparisons {

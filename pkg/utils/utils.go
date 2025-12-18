@@ -1,8 +1,8 @@
 package utils
 
 import (
+	"fmt"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -33,6 +33,70 @@ func IsSlice(v interface{}) bool {
 	if v == nil {
 		return false
 	}
-	return reflect.TypeOf(v).Kind() == reflect.Slice ||
-		reflect.TypeOf(v).Kind() == reflect.Array
+
+	// Проверяем явно на тип []interface{}
+	switch v.(type) {
+	case []interface{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsEqual проверяет равенство двух значений без использования reflect.DeepEqual
+func IsEqual(a, b interface{}) bool {
+	// Оба nil
+	if a == nil && b == nil {
+		return true
+	}
+	// Один nil, другой нет
+	if a == nil || b == nil {
+		return false
+	}
+
+	// Проверяем простые типы
+	switch aVal := a.(type) {
+	case string:
+		if bVal, ok := b.(string); ok {
+			return aVal == bVal
+		}
+		return false
+	case bool:
+		if bVal, ok := b.(bool); ok {
+			return aVal == bVal
+		}
+		return false
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		// Для чисел используем форматирование в строку для сравнения
+		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+	case []interface{}:
+		if bVal, ok := b.([]interface{}); ok {
+			if len(aVal) != len(bVal) {
+				return false
+			}
+			for i := range aVal {
+				if !IsEqual(aVal[i], bVal[i]) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	case map[string]interface{}:
+		if bVal, ok := b.(map[string]interface{}); ok {
+			if len(aVal) != len(bVal) {
+				return false
+			}
+			for key := range aVal {
+				if !IsEqual(aVal[key], bVal[key]) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	default:
+		// Для остальных типов используем строгое сравнение
+		return a == b
+	}
 }
