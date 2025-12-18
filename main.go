@@ -219,7 +219,67 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 				afterMap, _ := afterVal.(map[string]interface{})
 				nestedDiffs := findDifferences(beforeMap, afterMap, fullKey)
 				diffs = append(diffs, nestedDiffs...)
-			} else if !reflect.DeepEqual(beforeVal, afterVal) { // Если значения разные
+			} else if utils.IsSlice(beforeVal) && utils.IsSlice(afterVal) {
+				// Если оба значения - срезы/массивы, сравниваем поэлементно
+				beforeSlice := reflect.ValueOf(beforeVal)
+				afterSlice := reflect.ValueOf(afterVal)
+
+				// Сравниваем по максимальной длине
+				maxLen := beforeSlice.Len()
+				if afterSlice.Len() > maxLen {
+					maxLen = afterSlice.Len()
+				}
+				for i := 0; i < maxLen; i++ {
+					elementKey := fmt.Sprintf("%s[%d]", fullKey, i)
+
+					var beforeElem, afterElem interface{}
+					var beforeElemExists, afterElemExists bool
+
+					if i < beforeSlice.Len() {
+						beforeElem = beforeSlice.Index(i).Interface()
+						beforeElemExists = true
+					}
+
+					if i < afterSlice.Len() {
+						afterElem = afterSlice.Index(i).Interface()
+						afterElemExists = true
+					}
+
+					if beforeElemExists && !afterElemExists {
+						diffs = append(diffs, Difference{
+							Field:  elementKey,
+							Before: beforeElem,
+							After:  nil,
+						})
+					} else if !beforeElemExists && afterElemExists {
+						diffs = append(diffs, Difference{
+							Field:  elementKey,
+							Before: nil,
+							After:  afterElem,
+						})
+					} else if !reflect.DeepEqual(beforeElem, afterElem) {
+						// Рекурсивно сравниваем элементы если они сложные
+						if utils.IsMap(beforeElem) && utils.IsMap(afterElem) {
+							beforeMap, _ := beforeElem.(map[string]interface{})
+							afterMap, _ := afterElem.(map[string]interface{})
+							nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
+							diffs = append(diffs, nestedDiffs...)
+						} else if utils.IsSlice(beforeElem) && utils.IsSlice(afterElem) {
+							// Для вложенных срезов тоже рекурсивно сравниваем
+							beforeMap := map[string]interface{}{"": beforeElem}
+							afterMap := map[string]interface{}{"": afterElem}
+							nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
+							diffs = append(diffs, nestedDiffs...)
+						} else {
+							diffs = append(diffs, Difference{
+								Field:  elementKey,
+								Before: beforeElem,
+								After:  afterElem,
+							})
+						}
+					}
+				}
+			} else if !reflect.DeepEqual(beforeVal, afterVal) { // Для всех остальных типов используем DeepEqual
 				diffs = append(diffs,
 					Difference{
 						Field:  fullKey,
@@ -265,7 +325,7 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 	// Создаем заголовки
 	headers := []string{"FileName", "ExistsInBoth"}
 	for _, field := range fields {
-		headers = append(headers, field+"_Before", field+"_After")
+		headers = append(headers, field+"_before", field+"_after")
 	}
 
 	// Записываем заголовки в первую строку

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -21,7 +22,17 @@ func GetJSONFiles(dir string) ([]string, error) {
 	return result, nil
 }
 
+// IsMap проверяет, является ли значение словарем
 func IsMap(v interface{}) bool {
 	_, ok := v.(map[string]interface{})
 	return ok
+}
+
+// IsSlice проверяет, является ли значение срезом/массивом
+func IsSlice(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	return reflect.TypeOf(v).Kind() == reflect.Slice ||
+		reflect.TypeOf(v).Kind() == reflect.Array
 }
