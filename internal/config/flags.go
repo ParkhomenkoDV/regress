@@ -19,7 +19,7 @@ func parse() (*Flags, error) {
 	beforeDir := flag.String("before", "before", "Директория с исходными JSON файлами")
 	afterDir := flag.String("after", "after", "Директория с измененными JSON файлами")
 	showAll := flag.Bool("all", false, "Показать все файлы (даже без изменений)")
-	workers := flag.Int("workers", 4, "Количество параллельных воркеров")
+	workers := flag.Int("workers", runtime.NumCPU()-1, "Количество параллельных воркеров")
 	flag.Parse()
 
 	if *beforeDir == "" {

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xuri/excelize/v2"
+	excel "github.com/xuri/excelize/v2"
 )
 
 // Comparison содержит сравнение одного файла
@@ -303,8 +303,7 @@ func countChanged(comparisons []Comparison) int {
 }
 
 func ExportToExcel(comparisons []Comparison, filename string) error {
-	// Создаем новый Excel файл
-	f := excelize.NewFile()
+	f := excel.NewFile() // Создаем новый Excel файл
 
 	// Получаем все уникальные названия полей для создания заголовков
 	fieldSet := make(map[string]bool)
@@ -328,7 +327,7 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 
 	// Записываем заголовки в первую строку
 	for col, header := range headers {
-		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
+		cell, _ := excel.CoordinatesToCellName(col+1, 1)
 		f.SetCellValue("Sheet1", cell, header)
 	}
 
@@ -344,12 +343,12 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 		col := 1
 
 		// FileName
-		cell, _ := excelize.CoordinatesToCellName(col, row+2)
+		cell, _ := excel.CoordinatesToCellName(col, row+2)
 		f.SetCellValue("Sheet1", cell, comp.FileName)
 		col++
 
 		// ExistsInBoth
-		cell, _ = excelize.CoordinatesToCellName(col, row+2)
+		cell, _ = excel.CoordinatesToCellName(col, row+2)
 		f.SetCellValue("Sheet1", cell, comp.ExistsInBoth)
 		col++
 
@@ -357,12 +356,12 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 		for _, field := range fields {
 			if diff, exists := diffMap[field]; exists {
 				// Before значение
-				cell, _ = excelize.CoordinatesToCellName(col, row+2)
+				cell, _ = excel.CoordinatesToCellName(col, row+2)
 				f.SetCellValue("Sheet1", cell, diff.Before)
 				col++
 
 				// After значение
-				cell, _ = excelize.CoordinatesToCellName(col, row+2)
+				cell, _ = excel.CoordinatesToCellName(col, row+2)
 				f.SetCellValue("Sheet1", cell, diff.After)
 				col++
 			} else {
@@ -377,11 +376,11 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 	}
 
 	// Записываем форматирование для заголовков
-	style, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{
+	style, _ := f.NewStyle(&excel.Style{
+		Font: &excel.Font{
 			Bold: true,
 		},
-		Fill: excelize.Fill{
+		Fill: excel.Fill{
 			Type:    "pattern",
 			Color:   []string{"#E0E0E0"},
 			Pattern: 1,
@@ -390,7 +389,7 @@ func ExportToExcel(comparisons []Comparison, filename string) error {
 
 	// Применяем стиль к заголовкам
 	for i := 1; i <= len(headers); i++ {
-		cell, _ := excelize.CoordinatesToCellName(i, 1)
+		cell, _ := excel.CoordinatesToCellName(i, 1)
 		f.SetCellStyle("Sheet1", cell, cell, style)
 	}
 
