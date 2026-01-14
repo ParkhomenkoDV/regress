@@ -50,15 +50,18 @@ func main() {
 		}
 	}
 
+	fmt.Printf("\nСтатистика:\n")
+	fmt.Printf("\tВсего файлов: %d\n", len(comparisons))
+	fmt.Printf("\tС изменениями: %d\n", countChanged(comparisons))
+	fmt.Printf("\tВремя обработки: %v\n", time.Since(start))
+	fmt.Println("Экспорт в excel...")
+
 	err = ExportToExcel(comparison, "comparison.xlsx")
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("\nСтатистика:\n")
-	fmt.Printf("\tВсего файлов: %d\n", len(comparisons))
-	fmt.Printf("\tС изменениями: %d\n", countChanged(comparisons))
-	fmt.Printf("\tВремя обработки: %v\n", time.Since(start))
+	fmt.Println("Регрес готов!")
 }
 
 func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error) {
