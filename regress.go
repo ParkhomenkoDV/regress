@@ -175,6 +175,7 @@ func readDynamicJSON(path string) (storage.DB, error) {
 
 	return db, nil
 }
+
 func findDifferences(before, after storage.DB, prefix string) []Difference {
 	var diffs []Difference
 

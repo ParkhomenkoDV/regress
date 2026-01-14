@@ -6,7 +6,7 @@ import (
 	"runtime"
 )
 
-const usage = "Использование: go run regress.go --before <путь> --after <путь> [--all] [--workers N]"
+const usage = "Использование: go run regress.go [--before <путь>] [--after <путь>] [--all] [--workers N]"
 
 type Flags struct {
 	BeforeDir string
