@@ -50,10 +50,8 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nСтатистика:\n")
-	fmt.Printf("\tВсего файлов: %d\n", len(comparisons))
-	fmt.Printf("\tС изменениями: %d\n", countChanged(comparisons))
-	fmt.Printf("\tВремя обработки: %v\n", time.Since(start))
+	fmt.Printf("Файлов с изменениями/всего: %d/%d\n", countChanged(comparisons), len(comparisons))
+	fmt.Printf("Время обработки: %v\n", time.Since(start))
 	fmt.Println("Экспорт в excel...")
 
 	err = ExportToExcel(comparison, "comparison.xlsx")
