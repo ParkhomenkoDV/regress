@@ -7,5 +7,5 @@
 ## Usage
 
 ```bash
-go run regress.go --before <путь> --after <путь> [--all] [--workers N]"
+go run regress.go --before <путь> --after <путь> [--all] [--workers N]
 ```
