@@ -45,12 +45,9 @@ func IsSlice(v interface{}) bool {
 
 // IsEqual проверяет равенство двух значений без использования reflect.DeepEqual
 func IsEqual(a, b interface{}) bool {
-	// Оба nil
 	if a == nil && b == nil {
 		return true
-	}
-	// Один nil, другой нет
-	if a == nil || b == nil {
+	} else if a == nil || b == nil {
 		return false
 	}
 
