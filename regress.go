@@ -86,7 +86,7 @@ func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error)
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
-		go worker(jobs, results, errors, beforeDir, afterDir, afterMap, &wg)
+		go work(jobs, results, errors, beforeDir, afterDir, afterMap, &wg)
 	}
 
 	// Отправляем задания
@@ -120,7 +120,7 @@ func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error)
 	return comparisons, nil
 }
 
-func worker(jobs <-chan string, results chan<- Comparison, errors chan<- error,
+func work(jobs <-chan string, results chan<- Comparison, errors chan<- error,
 	beforeDir, afterDir string, afterMap map[string]bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 
