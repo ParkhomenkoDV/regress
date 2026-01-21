@@ -181,12 +181,12 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 	var diffs []Difference
 
 	// Все уникальные ключи
-	allKeys := make(map[string]bool)
+	allKeys := make(map[string]struct{})
 	for k := range before {
-		allKeys[k] = true
+		allKeys[k] = struct{}{}
 	}
 	for k := range after {
-		allKeys[k] = true
+		allKeys[k] = struct{}{}
 	}
 
 	for key := range allKeys {
