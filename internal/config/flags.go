@@ -16,10 +16,12 @@ type Flags struct {
 }
 
 func parse() (*Flags, error) {
+	numCPU := runtime.NumCPU()
+
 	beforeDir := flag.String("before", "before", "Директория с исходными JSON файлами")
 	afterDir := flag.String("after", "after", "Директория с измененными JSON файлами")
 	showAll := flag.Bool("all", false, "Показать все файлы (даже без изменений)")
-	workers := flag.Int("workers", runtime.NumCPU()-1, "Количество параллельных воркеров")
+	workers := flag.Int("workers", numCPU, "Количество параллельных воркеров")
 	flag.Parse()
 
 	if *beforeDir == "" {
@@ -31,9 +33,9 @@ func parse() (*Flags, error) {
 		return &Flags{}, fmt.Errorf("empty dir after %s", *afterDir)
 	}
 
-	if *workers < 1 || *workers > runtime.NumCPU() {
+	if *workers < 1 || *workers > numCPU {
 		fmt.Println(usage)
-		return &Flags{}, fmt.Errorf("workers=%d must be in [1, %d] ", *workers, runtime.NumCPU())
+		return &Flags{}, fmt.Errorf("workers=%d must be in [1, %d] ", *workers, numCPU)
 	}
 
 	return &Flags{
