@@ -17,11 +17,11 @@ test:
 
 bench:
 	@echo "$(BLUE)Running benchmarks...$(RESET)"
-	go test -benchmem -benchtime 5s -count=5
+	go test -bench=. -benchmem -benchtime 5s -count=3
 
 prof:
 	@echo "$(BLUE)Running profiling...$(RESET)"
-	go test -benchmem -benchtime 5s -count=5 -cpuprofile=cpu.out -memprofile=mem.out
+	go test -bench=. -benchmem -benchtime 5s -count=3 -cpuprofile=cpu.out -memprofile=mem.out
 
 run:
 	@echo "$(BLUE)Running project...$(RESET)"
