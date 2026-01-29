@@ -6,7 +6,7 @@ import (
 	"runtime"
 )
 
-const usage = "Использование: go run regress.go [--before <путь>] [--after <путь>] [--all] [--workers N]"
+const usage = "Использование: go run regress.go [--before=<путь>] [--after=<путь>] [--all] [--workers=N]"
 
 type Flags struct {
 	BeforeDir string
@@ -33,7 +33,7 @@ func parse() (*Flags, error) {
 		return &Flags{}, fmt.Errorf("empty dir after %s", *afterDir)
 	}
 
-	if *workers < 1 || *workers > numCPU {
+	if !(1 <= *workers && *workers <= numCPU) {
 		fmt.Println(usage)
 		return &Flags{}, fmt.Errorf("workers=%d must be in [1, %d] ", *workers, numCPU)
 	}

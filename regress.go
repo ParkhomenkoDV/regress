@@ -33,13 +33,15 @@ type Difference struct {
 func main() {
 	cfg, err := config.New()
 	if err != nil {
-		panic(err)
+		fmt.Printf(utils.Red+"ошибка конфигурации: %v", err)
+		return
 	}
 
 	start := time.Now()
 	comparisons, err := compareJSONs(cfg.BeforeDir, cfg.AfterDir, cfg.Workers)
 	if err != nil {
-		panic(err)
+		fmt.Printf(utils.Red+"ошибка сравнения json: %v", err)
+		return
 	}
 
 	// Фильтруем если нужно показывать только изменения
@@ -56,10 +58,11 @@ func main() {
 
 	err = ExportToExcel(comparison, "comparison.xlsx")
 	if err != nil {
-		panic(err)
+		fmt.Printf(utils.Red+"ошибка экспорта в excel: %v", err)
+		return
 	}
 
-	fmt.Println("Регрес готов!")
+	fmt.Println(utils.Green + "Регрес готов!" + utils.Reset)
 }
 
 func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error) {
