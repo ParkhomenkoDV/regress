@@ -55,6 +55,37 @@ func IsSlice(v interface{}) bool {
 	}
 }
 
+// IsSimpleSlice проверяет, содержит ли срез только простые типы
+func IsSimpleSlice(slice []interface{}) bool {
+	for _, v := range slice {
+		switch v.(type) {
+		case int, int8, int16, int32, int64,
+			uint, uint8, uint16, uint32, uint64,
+			float32, float64,
+			string,
+			bool,
+			nil:
+		// Простой тип - продолжаем проверку
+		default: // Нашли сложный тип
+			return false
+		}
+	}
+	return true
+}
+
+// IsEqualSimpleSlices сравнивает два среза простых типов
+func IsEqualSimpleSlices(a, b []interface{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // IsEqual проверяет равенство двух значений без использования reflect.DeepEqual
 func IsEqual(a, b interface{}) bool {
 	if a == nil && b == nil {

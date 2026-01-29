@@ -224,63 +224,76 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 				nestedDiffs := findDifferences(beforeMap, afterMap, fullKey)
 				diffs = append(diffs, nestedDiffs...)
 			} else if utils.IsSlice(beforeVal) && utils.IsSlice(afterVal) {
-				// Если оба значения - срезы/массивы, сравниваем поэлементно
+				// Если оба значения - срезы/массивы
 				beforeSlice, _ := beforeVal.([]interface{})
 				afterSlice, _ := afterVal.([]interface{})
 
-				// Сравниваем по максимальной длине
-				maxLen := len(beforeSlice)
-				if len(afterSlice) > maxLen {
-					maxLen = len(afterSlice)
-				}
-
-				for i := 0; i < maxLen; i++ {
-					elementKey := fmt.Sprintf("%s[%d]", fullKey, i)
-
-					var beforeElem, afterElem interface{}
-					var beforeElemExists, afterElemExists bool
-
-					if i < len(beforeSlice) {
-						beforeElem = beforeSlice[i]
-						beforeElemExists = true
+				// Проверяем, содержит ли срез только простые типы
+				if utils.IsSimpleSlice(beforeSlice) && utils.IsSimpleSlice(afterSlice) {
+					// Если оба среза содержат только простые типы, сравниваем целиком
+					if !utils.IsEqualSimpleSlices(beforeSlice, afterSlice) {
+						diffs = append(diffs, Difference{
+							Field:  fullKey,
+							Before: beforeSlice,
+							After:  afterSlice,
+						})
+					}
+				} else {
+					// Если срезы содержат сложные типы, сравниваем поэлементно
+					// Сравниваем по максимальной длине
+					maxLen := len(beforeSlice)
+					if len(afterSlice) > maxLen {
+						maxLen = len(afterSlice)
 					}
 
-					if i < len(afterSlice) {
-						afterElem = afterSlice[i]
-						afterElemExists = true
-					}
+					for i := 0; i < maxLen; i++ {
+						elementKey := fmt.Sprintf("%s[%d]", fullKey, i)
 
-					if beforeElemExists && !afterElemExists {
-						diffs = append(diffs, Difference{
-							Field:  elementKey,
-							Before: beforeElem,
-							After:  nil,
-						})
-					} else if !beforeElemExists && afterElemExists {
-						diffs = append(diffs, Difference{
-							Field:  elementKey,
-							Before: nil,
-							After:  afterElem,
-						})
-					} else if !utils.IsEqual(beforeElem, afterElem) {
-						// Рекурсивно сравниваем элементы если они сложные
-						if utils.IsMap(beforeElem) && utils.IsMap(afterElem) {
-							beforeMap, _ := beforeElem.(map[string]interface{})
-							afterMap, _ := afterElem.(map[string]interface{})
-							nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
-							diffs = append(diffs, nestedDiffs...)
-						} else if utils.IsSlice(beforeElem) && utils.IsSlice(afterElem) {
-							// Для вложенных срезов тоже рекурсивно сравниваем
-							beforeMap := map[string]interface{}{"": beforeElem}
-							afterMap := map[string]interface{}{"": afterElem}
-							nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
-							diffs = append(diffs, nestedDiffs...)
-						} else {
+						var beforeElem, afterElem interface{}
+						var beforeElemExists, afterElemExists bool
+
+						if i < len(beforeSlice) {
+							beforeElem = beforeSlice[i]
+							beforeElemExists = true
+						}
+
+						if i < len(afterSlice) {
+							afterElem = afterSlice[i]
+							afterElemExists = true
+						}
+
+						if beforeElemExists && !afterElemExists {
 							diffs = append(diffs, Difference{
 								Field:  elementKey,
 								Before: beforeElem,
+								After:  nil,
+							})
+						} else if !beforeElemExists && afterElemExists {
+							diffs = append(diffs, Difference{
+								Field:  elementKey,
+								Before: nil,
 								After:  afterElem,
 							})
+						} else if !utils.IsEqual(beforeElem, afterElem) {
+							// Рекурсивно сравниваем элементы если они сложные
+							if utils.IsMap(beforeElem) && utils.IsMap(afterElem) {
+								beforeMap, _ := beforeElem.(map[string]interface{})
+								afterMap, _ := afterElem.(map[string]interface{})
+								nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
+								diffs = append(diffs, nestedDiffs...)
+							} else if utils.IsSlice(beforeElem) && utils.IsSlice(afterElem) {
+								// Для вложенных срезов тоже рекурсивно сравниваем
+								beforeMap := map[string]interface{}{"": beforeElem}
+								afterMap := map[string]interface{}{"": afterElem}
+								nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
+								diffs = append(diffs, nestedDiffs...)
+							} else {
+								diffs = append(diffs, Difference{
+									Field:  elementKey,
+									Before: beforeElem,
+									After:  afterElem,
+								})
+							}
 						}
 					}
 				}
@@ -297,6 +310,7 @@ func findDifferences(before, after storage.DB, prefix string) []Difference {
 
 	return diffs
 }
+
 func countChanged(comparisons []Comparison) int {
 	count := 0
 	for _, comp := range comparisons {
