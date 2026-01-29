@@ -37,30 +37,42 @@ func main() {
 		return
 	}
 
+	fmt.Printf("[%v] Регресс запущен...\n", time.Now().Format("2006-01-02 15:04:05"))
+
 	comparisons, err := compareJSONs(cfg.BeforeDir, cfg.AfterDir, cfg.Workers)
 	if err != nil {
 		fmt.Printf(utils.Red+"ошибка сравнения json: %v", err)
 		return
 	}
 
-	// Фильтруем если нужно показывать только изменения
-	var comparison []Comparison
-	for _, comp := range comparisons {
-		if cfg.ShowAll || len(comp.Differences) > 0 || !comp.ExistsInBoth {
-			comparison = append(comparison, comp)
-		}
-	}
-
 	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
+
+	filtered := filterComparisons(comparisons, cfg.ShowAll) // Фильтруем, если нужно показывать только изменения
+
 	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format("2006-01-02 15:04:05"))
 
-	err = ExportToExcel(comparison, "comparison.xlsx")
+	err = ExportToExcel(filtered, "comparison.xlsx")
 	if err != nil {
 		fmt.Printf(utils.Red+"ошибка экспорта в excel: %v", err)
 		return
 	}
 
 	fmt.Printf("[%v] %vРегрес готов!%v\n", time.Now().Format("2006-01-02 15:04:05"), utils.Green, utils.Reset)
+}
+
+// filterComparisons фильтрует сравнения по настройкам
+func filterComparisons(comparisons []Comparison, showAll bool) []Comparison {
+	if showAll {
+		return comparisons
+	}
+
+	filtered := make([]Comparison, 0, len(comparisons))
+	for _, comp := range comparisons {
+		if len(comp.Differences) > 0 || !comp.ExistsInBoth {
+			filtered = append(filtered, comp)
+		}
+	}
+	return filtered
 }
 
 func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error) {
@@ -78,6 +90,10 @@ func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error)
 	afterMap := make(map[string]bool)
 	for _, f := range afterFiles {
 		afterMap[f] = true
+	}
+
+	if len(beforeFiles) < workers {
+		workers = len(beforeFiles)
 	}
 
 	jobs := make(chan string, len(beforeFiles))
@@ -136,9 +152,10 @@ func work(jobs <-chan string, results chan<- Comparison, errors chan<- error,
 }
 
 func compareFile(filename, beforeDir, afterDir string, existsInAfter bool) (Comparison, error) {
-	var comparison Comparison
-	comparison.FileName = filename
-	comparison.ExistsInBoth = existsInAfter
+	comparison := Comparison{
+		FileName:     filename,
+		ExistsInBoth: existsInAfter,
+	}
 
 	// Читаем файл "до"
 	beforePath := filepath.Join(beforeDir, filename)
@@ -179,7 +196,7 @@ func readDynamicJSON(path string) (storage.DB, error) {
 }
 
 func findDifferences(before, after storage.DB, prefix string) []Difference {
-	var diffs []Difference
+	diffs := make([]Difference, 0, max(len(before), len(after)))
 
 	// Все уникальные ключи
 	allKeys := make(map[string]struct{})

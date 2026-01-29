@@ -25,7 +25,7 @@ func GetJSONFiles(dir string) ([]string, error) {
 		return nil, err
 	}
 
-	var result []string
+	result := make([]string, 0, len(files))
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".json") {
 			result = append(result, file.Name())
@@ -34,7 +34,7 @@ func GetJSONFiles(dir string) ([]string, error) {
 	return result, nil
 }
 
-// IsMap проверяет, является ли значение словарем
+// IsMap проверяет, является ли значение картой
 func IsMap(v interface{}) bool {
 	_, ok := v.(map[string]interface{})
 	return ok
@@ -42,17 +42,8 @@ func IsMap(v interface{}) bool {
 
 // IsSlice проверяет, является ли значение срезом/массивом
 func IsSlice(v interface{}) bool {
-	if v == nil {
-		return false
-	}
-
-	// Проверяем явно на тип []interface{}
-	switch v.(type) {
-	case []interface{}:
-		return true
-	default:
-		return false
-	}
+	_, ok := v.([]interface{})
+	return ok
 }
 
 // IsSimpleSlice проверяет, содержит ли срез только простые типы

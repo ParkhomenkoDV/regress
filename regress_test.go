@@ -16,7 +16,6 @@ func BenchmarkFindDifferences(b *testing.B) {
 		"price":  99.99,
 		"active": true,
 	}
-
 	simpleAfter := storage.DB{
 		"id":     1,
 		"name":   "test_modified",
@@ -39,7 +38,6 @@ func BenchmarkFindDifferences(b *testing.B) {
 			map[string]interface{}{"id": 2, "name": "item2"},
 		},
 	}
-
 	nestedAfter := storage.DB{
 		"user": map[string]interface{}{
 			"name": "John",
@@ -59,12 +57,11 @@ func BenchmarkFindDifferences(b *testing.B) {
 	largeSliceBefore := storage.DB{
 		"data": generateLargeSlice(1000),
 	}
-
 	largeSliceAfter := storage.DB{
 		"data": generateLargeSlice(1000),
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		name          string
 		before, after storage.DB
 	}{
@@ -75,10 +72,10 @@ func BenchmarkFindDifferences(b *testing.B) {
 		{"empty", storage.DB{}, storage.DB{}},
 	}
 
-	for _, tc := range testCases {
-		b.Run(tc.name, func(b *testing.B) {
+	for _, test := range tests {
+		b.Run(test.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				findDifferences(tc.before, tc.after, "")
+				findDifferences(test.before, test.after, "")
 			}
 		})
 	}
