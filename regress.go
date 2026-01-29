@@ -37,7 +37,6 @@ func main() {
 		return
 	}
 
-	start := time.Now()
 	comparisons, err := compareJSONs(cfg.BeforeDir, cfg.AfterDir, cfg.Workers)
 	if err != nil {
 		fmt.Printf(utils.Red+"ошибка сравнения json: %v", err)
@@ -52,9 +51,8 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Файлов с изменениями/всего: %d/%d\n", countChanged(comparisons), len(comparisons))
-	fmt.Printf("Время обработки: %v\n", time.Since(start))
-	fmt.Println("Экспорт в excel...")
+	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
+	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	err = ExportToExcel(comparison, "comparison.xlsx")
 	if err != nil {
@@ -62,7 +60,7 @@ func main() {
 		return
 	}
 
-	fmt.Println(utils.Green + "Регрес готов!" + utils.Reset)
+	fmt.Printf("[%v] %vРегрес готов!%v\n", time.Now().Format("2006-01-02 15:04:05"), utils.Green, utils.Reset)
 }
 
 func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error) {
