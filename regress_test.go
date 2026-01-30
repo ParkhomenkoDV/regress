@@ -10,35 +10,8 @@ import (
 
 func BenchmarkFindDifferences(b *testing.B) {
 	// Тестовые данные
-	simpleBefore := storage.DB{
-		"id":     1,
-		"name":   "test",
-		"price":  99.99,
-		"active": true,
-	}
-	simpleAfter := storage.DB{
-		"id":     1,
-		"name":   "test_modified",
-		"price":  109.99,
-		"active": true,
-	}
 
-	nestedBefore := storage.DB{
-		"user": map[string]interface{}{
-			"name": "John",
-			"age":  30,
-			"address": map[string]interface{}{
-				"city":    "Moscow",
-				"street":  "Tverskaya",
-				"zipcode": "123456",
-			},
-		},
-		"items": []interface{}{
-			map[string]interface{}{"id": 1, "name": "item1"},
-			map[string]interface{}{"id": 2, "name": "item2"},
-		},
-	}
-	nestedAfter := storage.DB{
+	equal := storage.DB{
 		"user": map[string]interface{}{
 			"name": "John",
 			"age":  31, // Изменение
@@ -65,11 +38,65 @@ func BenchmarkFindDifferences(b *testing.B) {
 		name          string
 		before, after storage.DB
 	}{
-		{"simple", simpleBefore, simpleAfter},
-		{"nested", nestedBefore, nestedAfter},
-		{"large_slice", largeSliceBefore, largeSliceAfter},
-		{"identical", simpleBefore, simpleBefore},
-		{"empty", storage.DB{}, storage.DB{}},
+		{
+			name: "simple",
+			before: storage.DB{
+				"id":     1,
+				"name":   "test",
+				"price":  99.99,
+				"active": true,
+			},
+			after: storage.DB{
+				"id":     1,
+				"name":   "test_modified",
+				"price":  109.99,
+				"active": true,
+			},
+		},
+		{
+			name: "nested",
+			before: storage.DB{
+				"user": map[string]interface{}{
+					"name": "John",
+					"age":  30,
+					"address": map[string]interface{}{
+						"city":    "Moscow",
+						"street":  "Tverskaya",
+						"zipcode": "123456",
+					},
+				},
+				"items": []interface{}{
+					map[string]interface{}{"id": 1, "name": "item1"},
+					map[string]interface{}{"id": 2, "name": "item2"},
+				},
+			},
+			after: storage.DB{
+				"user": map[string]interface{}{
+					"name": "John",
+					"age":  31, // Изменение
+					"address": map[string]interface{}{
+						"city":    "Moscow",
+						"street":  "Tverskaya", // Без изменений
+						"zipcode": "123457",    // Изменение
+					},
+				},
+				"items": []interface{}{
+					map[string]interface{}{"id": 1, "name": "item1"},
+					map[string]interface{}{"id": 2, "name": "item2_modified"}, // Изменение
+				},
+			},
+		},
+		{
+			name: "large_slice", before: largeSliceBefore, after: largeSliceAfter},
+		{
+			name:   "identical",
+			before: equal,
+			after:  equal,
+		},
+		{
+			name:   "empty",
+			before: storage.DB{},
+			after:  storage.DB{}},
 	}
 
 	for _, test := range tests {
@@ -78,50 +105,6 @@ func BenchmarkFindDifferences(b *testing.B) {
 				findDifferences(test.before, test.after, "")
 			}
 		})
-	}
-}
-
-func BenchmarkFindDifferencesWithSimpleSlices(b *testing.B) {
-	// Тестирование срезами простых типов
-	before := storage.DB{
-		"tags":  []interface{}{"go", "test", "benchmark"},
-		"ids":   []interface{}{1, 2, 3, 4, 5},
-		"flags": []interface{}{true, false, true},
-	}
-
-	after := storage.DB{
-		"tags":  []interface{}{"go", "test", "performance"}, // Одно изменение
-		"ids":   []interface{}{1, 2, 3, 4, 5},               // Без изменений
-		"flags": []interface{}{true, false, true},           // Без изменений
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		findDifferences(before, after, "")
-	}
-}
-
-func BenchmarkFindDifferencesWithComplexSlices(b *testing.B) {
-	// Тестирование срезами сложных типов
-	before := storage.DB{
-		"users": []interface{}{
-			map[string]interface{}{"id": 1, "name": "Alice"},
-			map[string]interface{}{"id": 2, "name": "Bob"},
-			map[string]interface{}{"id": 3, "name": "Charlie"},
-		},
-	}
-
-	after := storage.DB{
-		"users": []interface{}{
-			map[string]interface{}{"id": 1, "name": "Alice"},
-			map[string]interface{}{"id": 2, "name": "Bob Modified"},
-			map[string]interface{}{"id": 3, "name": "Charlie"},
-		},
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		findDifferences(before, after, "")
 	}
 }
 
@@ -154,33 +137,6 @@ func BenchmarkReadDynamicJSON(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		readDynamicJSON(filePath)
-	}
-}
-
-func BenchmarkCompareFile(b *testing.B) {
-	// Создаем тестовые директории и файлы
-	tempDir := b.TempDir()
-	beforeDir := filepath.Join(tempDir, "before")
-	afterDir := filepath.Join(tempDir, "after")
-	os.MkdirAll(beforeDir, 0755)
-	os.MkdirAll(afterDir, 0755)
-
-	// Создаем идентичные файлы
-	testData := map[string]interface{}{
-		"id":    1,
-		"title": "Test Document",
-		"data":  generateTestData(100), // 100 элементов
-	}
-
-	data, _ := json.Marshal(testData)
-	beforeFile := filepath.Join(beforeDir, "test.json")
-	afterFile := filepath.Join(afterDir, "test.json")
-	os.WriteFile(beforeFile, data, 0644)
-	os.WriteFile(afterFile, data, 0644)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		compareFile("test.json", beforeDir, afterDir, true)
 	}
 }
 

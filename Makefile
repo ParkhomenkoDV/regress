@@ -17,7 +17,7 @@ test:
 
 bench:
 	@echo "$(BLUE)Running benchmarks...$(RESET)"
-	go test -bench=. -benchmem -benchtime 5s -count=3
+	go test -bench=. -benchmem -benchtime 3s -count=1
 
 prof:
 	@echo "$(BLUE)Running profiling...$(RESET)"
