@@ -39,6 +39,29 @@ go build -o regress regress.go
 go install
 ```
 
+## Schema
+```
+before/      after/
+| 1.json -   | 1.json -
+| 2.json  |  | 2.json  |
+| 3.json  |  | 3.json  |
+| ...     |  | ...     |
+          |            |  
+          v            v
+         ----------------
+        | i.json  i.json |
+        |    |       |   |
+        |    v       v   |
+        |    UnMarshal   | gorutine
+        |      |   |     |
+        |      v   v     |
+        |     Compare    |
+         ----------------
+                 |
+                 v
+         comparison.xlsx
+```
+
 ## Benchmarks
 ```
 go test -bench=. -benchmem -benchtime 3s -count=1
