@@ -1,10 +1,16 @@
 package config
 
+import (
+	"flag"
+	"fmt"
+	"runtime"
+)
+
 type Config struct {
-	BeforeDir string
-	AfterDir  string
-	ShowAll   bool
-	Workers   int
+	Before  string `doc:"Директория ДО"`
+	After   string `doc:"Директория ПОСЛЕ"`
+	ShowAll bool   `doc:"Показывать все поля"`
+	Workers int    `doc:"Количество параллельных работников"`
 }
 
 func New() (*Config, error) {
@@ -13,10 +19,31 @@ func New() (*Config, error) {
 		return &Config{}, err
 	}
 
+	if flags.Before == "" {
+		return &Config{}, fmt.Errorf("empty dir before %s", flags.Before)
+	}
+	if flags.After == "" {
+		return &Config{}, fmt.Errorf("empty dir after %s", flags.After)
+	}
+	if flags.Workers < 1 {
+		return &Config{}, fmt.Errorf("workers=%d must be >= 1", flags.Workers)
+	}
+
+	return flags, nil
+}
+
+func parse() (*Config, error) {
+	before := flag.String("before", "before", "Директория с исходными JSON файлами")
+	after := flag.String("after", "after", "Директория с измененными JSON файлами")
+	showAll := flag.Bool("all", false, "Показать все файлы (даже без изменений)")
+	workers := flag.Int("workers", runtime.NumCPU(), "Количество параллельных воркеров")
+
+	flag.Parse()
+
 	return &Config{
-		BeforeDir: flags.BeforeDir,
-		AfterDir:  flags.AfterDir,
-		ShowAll:   flags.ShowAll,
-		Workers:   flags.Workers,
+		Before:  *before,
+		After:   *after,
+		ShowAll: *showAll,
+		Workers: *workers,
 	}, nil
 }

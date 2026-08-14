@@ -2,7 +2,7 @@
 package utils_test
 
 import (
-	"regress/pkg/utils"
+	"regress/internal/utils"
 	"testing"
 )
 

@@ -1,8 +1,6 @@
 module regress
 
-go 1.24
-
-toolchain go1.24.3
+go 1.25
 
 require github.com/xuri/excelize/v2 v2.10.0
 

@@ -1,4 +1,4 @@
-package main
+package compare
 
 import (
 	"encoding/json"
@@ -7,6 +7,15 @@ import (
 	"regress/internal/storage"
 	"testing"
 )
+
+// Вспомогательная функция для генерации большого среза
+func generateLargeSlice(size int) []interface{} {
+	slice := make([]interface{}, size)
+	for i := 0; i < size; i++ {
+		slice[i] = i
+	}
+	return slice
+}
 
 func BenchmarkFindDifferences(b *testing.B) {
 	// Тестовые данные
@@ -108,38 +117,6 @@ func BenchmarkFindDifferences(b *testing.B) {
 	}
 }
 
-// Вспомогательная функция для генерации большого среза
-func generateLargeSlice(size int) []interface{} {
-	slice := make([]interface{}, size)
-	for i := 0; i < size; i++ {
-		slice[i] = i
-	}
-	return slice
-}
-
-func BenchmarkReadDynamicJSON(b *testing.B) {
-	// Создаем временный файл для тестирования
-	tempDir := b.TempDir()
-	testData := map[string]interface{}{
-		"id":   1,
-		"name": "Test Document",
-		"metadata": map[string]interface{}{
-			"created": "2024-01-01",
-			"updated": "2024-01-02",
-		},
-		"items": []interface{}{1, 2, 3, 4, 5},
-	}
-
-	data, _ := json.Marshal(testData)
-	filePath := filepath.Join(tempDir, "test.json")
-	os.WriteFile(filePath, data, 0644)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		readDynamicJSON(filePath)
-	}
-}
-
 func BenchmarkCompareFileWithDifferences(b *testing.B) {
 	tempDir := b.TempDir()
 	beforeDir := filepath.Join(tempDir, "before")
@@ -175,14 +152,4 @@ func BenchmarkCompareFileWithDifferences(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		compareFile("test.json", beforeDir, afterDir, true)
 	}
-}
-
-// Вспомогательная функция для генерации тестовых данных
-func generateTestData(count int) map[string]interface{} {
-	data := make(map[string]interface{})
-	for i := 0; i < count; i++ {
-		key := string(rune('a'+i%26)) + string(rune('a'+(i/26)%26))
-		data[key] = i
-	}
-	return data
 }

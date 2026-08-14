@@ -2,52 +2,22 @@ package utils
 
 import (
 	"fmt"
-	"os"
-	"strings"
 )
-
-const (
-	Reset  = "\033[0m"
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
-	Purple = "\033[35m"
-	Cyan   = "\033[36m"
-	Gray   = "\033[37m"
-	White  = "\033[97m"
-)
-
-// Вспомогательные функции
-func GetJSONFiles(dir string) ([]string, error) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]string, 0, len(files))
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".json") {
-			result = append(result, file.Name())
-		}
-	}
-	return result, nil
-}
 
 // IsMap проверяет, является ли значение картой
-func IsMap(v interface{}) bool {
-	_, ok := v.(map[string]interface{})
+func IsMap(v any) bool {
+	_, ok := v.(map[string]any)
 	return ok
 }
 
 // IsSlice проверяет, является ли значение срезом/массивом
-func IsSlice(v interface{}) bool {
-	_, ok := v.([]interface{})
+func IsSlice(v any) bool {
+	_, ok := v.([]any)
 	return ok
 }
 
 // IsSimpleSlice проверяет, содержит ли срез только простые типы
-func IsSimpleSlice(slice []interface{}) bool {
+func IsSimpleSlice(slice []any) bool {
 	for _, v := range slice {
 		switch v.(type) {
 		case int, int8, int16, int32, int64,
@@ -65,7 +35,7 @@ func IsSimpleSlice(slice []interface{}) bool {
 }
 
 // IsEqualSimpleSlices сравнивает два среза простых типов
-func IsEqualSimpleSlices(a, b []interface{}) bool {
+func IsEqualSimpleSlices(a, b []any) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -78,7 +48,8 @@ func IsEqualSimpleSlices(a, b []interface{}) bool {
 }
 
 // IsEqual проверяет равенство двух значений без использования reflect.DeepEqual
-func IsEqual(a, b interface{}) bool {
+func IsEqual(a, b any) bool {
+	// Проверяем указатели
 	if a == nil && b == nil {
 		return true
 	} else if a == nil || b == nil {
@@ -100,8 +71,8 @@ func IsEqual(a, b interface{}) bool {
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		// Для чисел используем форматирование в строку для сравнения
 		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
-	case []interface{}:
-		if bVal, ok := b.([]interface{}); ok {
+	case []any:
+		if bVal, ok := b.([]any); ok {
 			if len(aVal) != len(bVal) {
 				return false
 			}
@@ -113,8 +84,8 @@ func IsEqual(a, b interface{}) bool {
 			return true
 		}
 		return false
-	case map[string]interface{}:
-		if bVal, ok := b.(map[string]interface{}); ok {
+	case map[string]any:
+		if bVal, ok := b.(map[string]any); ok {
 			if len(aVal) != len(bVal) {
 				return false
 			}
@@ -126,8 +97,7 @@ func IsEqual(a, b interface{}) bool {
 			return true
 		}
 		return false
-	default:
-		// Для остальных типов используем строгое сравнение
+	default: // Для остальных типов используем строгое сравнение
 		return a == b
 	}
 }

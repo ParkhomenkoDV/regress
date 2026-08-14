@@ -1,48 +1,28 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regress/internal/config"
-	"regress/internal/storage"
-	"regress/pkg/utils"
-	"sync"
+	"regress/internal/handlers/compare"
+	"regress/internal/handlers/export"
+	"regress/internal/shared"
 	"time"
-
-	excel "github.com/xuri/excelize/v2"
 )
-
-// Comparison содержит сравнение одного файла
-type Comparison struct {
-	FileName     string
-	Before       storage.DB
-	After        storage.DB
-	ExistsInBoth bool
-	Differences  []Difference
-}
-
-// Difference описывает одно различие
-type Difference struct {
-	Field  string      `doc:"Поле"`
-	Before interface{} `doc:"Значение до"`
-	After  interface{} `doc:"Значение после"`
-}
 
 func main() {
 	cfg, err := config.New()
 	if err != nil {
-		fmt.Printf(utils.Red+"ошибка конфигурации: %v", err)
-		return
+		fmt.Printf("Ошибка конфигурации %+v: %v", cfg, err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("[%v] Регресс запущен...\n", time.Now().Format("2006-01-02 15:04:05"))
 
-	comparisons, err := compareJSONs(cfg.BeforeDir, cfg.AfterDir, cfg.Workers)
+	comparisons, err := compare.JSONs(cfg.Before, cfg.After, cfg.Workers)
 	if err != nil {
-		fmt.Printf(utils.Red+"ошибка сравнения json: %v", err)
-		return
+		fmt.Printf("ошибка сравнения json: %v", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
@@ -51,282 +31,16 @@ func main() {
 
 	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format("2006-01-02 15:04:05"))
 
-	err = ExportToExcel(filtered, "comparison.xlsx")
+	err = export.Excel(filtered, "comparison.xlsx")
 	if err != nil {
-		fmt.Printf(utils.Red+"ошибка экспорта в excel: %v", err)
+		fmt.Printf("ошибка экспорта в excel: %v", err)
 		return
 	}
 
-	fmt.Printf("[%v] %vРегрес готов!%v\n", time.Now().Format("2006-01-02 15:04:05"), utils.Green, utils.Reset)
+	fmt.Printf("[%v] Регрес готов!\n", time.Now().Format("2006-01-02 15:04:05"))
 }
 
-// filterComparisons фильтрует сравнения по настройкам
-func filterComparisons(comparisons []Comparison, showAll bool) []Comparison {
-	if showAll {
-		return comparisons
-	}
-
-	filtered := make([]Comparison, 0, len(comparisons))
-	for _, comp := range comparisons {
-		if len(comp.Differences) > 0 || !comp.ExistsInBoth {
-			filtered = append(filtered, comp)
-		}
-	}
-	return filtered
-}
-
-func compareJSONs(beforeDir, afterDir string, workers int) ([]Comparison, error) {
-	// Получаем списки файлов
-	beforeFiles, err := utils.GetJSONFiles(beforeDir)
-	if err != nil {
-		return nil, err
-	}
-	afterFiles, err := utils.GetJSONFiles(afterDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Создаем мапу для быстрого поиска
-	afterMap := make(map[string]bool)
-	for _, f := range afterFiles {
-		afterMap[f] = true
-	}
-
-	if len(beforeFiles) < workers {
-		workers = len(beforeFiles)
-	}
-
-	jobs := make(chan string, len(beforeFiles))
-	results := make(chan Comparison, len(beforeFiles))
-	errors := make(chan error, len(beforeFiles))
-
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go work(jobs, results, errors, beforeDir, afterDir, afterMap, &wg)
-	}
-
-	// Отправляем задания
-	for _, file := range beforeFiles {
-		jobs <- file
-	}
-	close(jobs)
-
-	// Ждем завершения
-	go func() {
-		wg.Wait()
-		close(results)
-		close(errors)
-	}()
-
-	// Собираем результаты
-	var comparisons []Comparison
-	for result := range results {
-		comparisons = append(comparisons, result)
-	}
-
-	// Проверяем ошибки
-	select {
-	case err := <-errors:
-		if err != nil {
-			return nil, err
-		}
-	default:
-	}
-
-	return comparisons, nil
-}
-
-func work(jobs <-chan string, results chan<- Comparison, errors chan<- error,
-	beforeDir, afterDir string, afterMap map[string]bool, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	for filename := range jobs {
-		comp, err := compareFile(filename, beforeDir, afterDir, afterMap[filename])
-		if err != nil {
-			errors <- fmt.Errorf("файл %s: %v", filename, err)
-			continue
-		}
-		results <- comp
-	}
-}
-
-func compareFile(filename, beforeDir, afterDir string, existsInAfter bool) (Comparison, error) {
-	comparison := Comparison{
-		FileName:     filename,
-		ExistsInBoth: existsInAfter,
-	}
-
-	// Читаем файл "до"
-	beforePath := filepath.Join(beforeDir, filename)
-	beforeData, err := readDynamicJSON(beforePath)
-	if err != nil {
-		return comparison, err
-	}
-	comparison.Before = beforeData
-
-	// Читаем файл "после" если существует
-	if existsInAfter {
-		afterPath := filepath.Join(afterDir, filename)
-		afterData, err := readDynamicJSON(afterPath)
-		if err != nil {
-			return comparison, err
-		}
-		comparison.After = afterData
-
-		// Находим различия
-		comparison.Differences = findDifferences(beforeData, afterData, "")
-	}
-
-	return comparison, nil
-}
-
-func readDynamicJSON(path string) (storage.DB, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var db storage.DB
-	if err := json.Unmarshal(data, &db); err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
-func findDifferences(before, after storage.DB, prefix string) []Difference {
-	diffs := make([]Difference, 0, max(len(before), len(after)))
-
-	// Все уникальные ключи
-	allKeys := make(map[string]struct{})
-	for k := range before {
-		allKeys[k] = struct{}{}
-	}
-	for k := range after {
-		allKeys[k] = struct{}{}
-	}
-
-	for key := range allKeys {
-		fullKey := key
-		if prefix != "" {
-			fullKey = prefix + "." + key
-		}
-
-		beforeVal, beforeExists := before[key]
-		afterVal, afterExists := after[key]
-
-		switch {
-		case beforeExists && !afterExists:
-			diffs = append(diffs, Difference{
-				Field:  fullKey,
-				Before: beforeVal,
-				After:  nil,
-			})
-
-		case !beforeExists && afterExists:
-			diffs = append(diffs, Difference{
-				Field:  fullKey,
-				Before: nil,
-				After:  afterVal,
-			})
-
-		default:
-			if utils.IsMap(beforeVal) && utils.IsMap(afterVal) {
-				// Если оба значения - словари, сравниваем рекурсивно
-				beforeMap, _ := beforeVal.(map[string]interface{})
-				afterMap, _ := afterVal.(map[string]interface{})
-				nestedDiffs := findDifferences(beforeMap, afterMap, fullKey)
-				diffs = append(diffs, nestedDiffs...)
-			} else if utils.IsSlice(beforeVal) && utils.IsSlice(afterVal) {
-				// Если оба значения - срезы/массивы
-				beforeSlice, _ := beforeVal.([]interface{})
-				afterSlice, _ := afterVal.([]interface{})
-
-				// Проверяем, содержит ли срез только простые типы
-				if utils.IsSimpleSlice(beforeSlice) && utils.IsSimpleSlice(afterSlice) {
-					// Если оба среза содержат только простые типы, сравниваем целиком
-					if !utils.IsEqualSimpleSlices(beforeSlice, afterSlice) {
-						diffs = append(diffs, Difference{
-							Field:  fullKey,
-							Before: beforeSlice,
-							After:  afterSlice,
-						})
-					}
-				} else {
-					// Если срезы содержат сложные типы, сравниваем поэлементно
-					// Сравниваем по максимальной длине
-					maxLen := len(beforeSlice)
-					if len(afterSlice) > maxLen {
-						maxLen = len(afterSlice)
-					}
-
-					for i := 0; i < maxLen; i++ {
-						elementKey := fmt.Sprintf("%s[%d]", fullKey, i)
-
-						var beforeElem, afterElem interface{}
-						var beforeElemExists, afterElemExists bool
-
-						if i < len(beforeSlice) {
-							beforeElem = beforeSlice[i]
-							beforeElemExists = true
-						}
-
-						if i < len(afterSlice) {
-							afterElem = afterSlice[i]
-							afterElemExists = true
-						}
-
-						if beforeElemExists && !afterElemExists {
-							diffs = append(diffs, Difference{
-								Field:  elementKey,
-								Before: beforeElem,
-								After:  nil,
-							})
-						} else if !beforeElemExists && afterElemExists {
-							diffs = append(diffs, Difference{
-								Field:  elementKey,
-								Before: nil,
-								After:  afterElem,
-							})
-						} else if !utils.IsEqual(beforeElem, afterElem) {
-							// Рекурсивно сравниваем элементы если они сложные
-							if utils.IsMap(beforeElem) && utils.IsMap(afterElem) {
-								beforeMap, _ := beforeElem.(map[string]interface{})
-								afterMap, _ := afterElem.(map[string]interface{})
-								nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
-								diffs = append(diffs, nestedDiffs...)
-							} else if utils.IsSlice(beforeElem) && utils.IsSlice(afterElem) {
-								// Для вложенных срезов тоже рекурсивно сравниваем
-								beforeMap := map[string]interface{}{"": beforeElem}
-								afterMap := map[string]interface{}{"": afterElem}
-								nestedDiffs := findDifferences(beforeMap, afterMap, elementKey)
-								diffs = append(diffs, nestedDiffs...)
-							} else {
-								diffs = append(diffs, Difference{
-									Field:  elementKey,
-									Before: beforeElem,
-									After:  afterElem,
-								})
-							}
-						}
-					}
-				}
-			} else if !utils.IsEqual(beforeVal, afterVal) {
-				// Для всех остальных типов используем isEqual
-				diffs = append(diffs, Difference{
-					Field:  fullKey,
-					Before: beforeVal,
-					After:  afterVal,
-				})
-			}
-		}
-	}
-
-	return diffs
-}
-
-func countChanged(comparisons []Comparison) int {
+func countChanged(comparisons []shared.Comparison) int {
 	count := 0
 	for _, comp := range comparisons {
 		if comp.ExistsInBoth && len(comp.Differences) > 0 {
@@ -336,101 +50,17 @@ func countChanged(comparisons []Comparison) int {
 	return count
 }
 
-func ExportToExcel(comparisons []Comparison, filename string) error {
-	f := excel.NewFile() // Создаем новый Excel файл
+// filterComparisons фильтрует сравнения по настройкам
+func filterComparisons(comparisons []shared.Comparison, showAll bool) []shared.Comparison {
+	if showAll {
+		return comparisons
+	}
 
-	// Получаем все уникальные названия полей для создания заголовков
-	fieldSet := make(map[string]bool)
+	filtered := make([]shared.Comparison, 0, len(comparisons))
 	for _, comp := range comparisons {
-		for _, diff := range comp.Differences {
-			fieldSet[diff.Field] = true
+		if len(comp.Differences) > 0 || !comp.ExistsInBoth {
+			filtered = append(filtered, comp)
 		}
 	}
-
-	// Преобразуем в упорядоченный список полей
-	fields := make([]string, 0, len(fieldSet))
-	for field := range fieldSet {
-		fields = append(fields, field)
-	}
-
-	// Создаем заголовки
-	headers := []string{"FileName", "ExistsInBoth"}
-	for _, field := range fields {
-		headers = append(headers, field+"_before", field+"_after")
-	}
-
-	// Записываем заголовки в первую строку
-	for col, header := range headers {
-		cell, _ := excel.CoordinatesToCellName(col+1, 1)
-		f.SetCellValue("Sheet1", cell, header)
-	}
-
-	// Записываем данные
-	for row, comp := range comparisons {
-		// Преобразуем различия в карту для быстрого доступа
-		diffMap := make(map[string]Difference)
-		for _, diff := range comp.Differences {
-			diffMap[diff.Field] = diff
-		}
-
-		// Заполняем ячейки
-		col := 1
-
-		// FileName
-		cell, _ := excel.CoordinatesToCellName(col, row+2)
-		f.SetCellValue("Sheet1", cell, comp.FileName)
-		col++
-
-		// ExistsInBoth
-		cell, _ = excel.CoordinatesToCellName(col, row+2)
-		f.SetCellValue("Sheet1", cell, comp.ExistsInBoth)
-		col++
-
-		// Данные для каждого поля
-		for _, field := range fields {
-			if diff, exists := diffMap[field]; exists {
-				// Before значение
-				cell, _ = excel.CoordinatesToCellName(col, row+2)
-				f.SetCellValue("Sheet1", cell, diff.Before)
-				col++
-
-				// After значение
-				cell, _ = excel.CoordinatesToCellName(col, row+2)
-				f.SetCellValue("Sheet1", cell, diff.After)
-				col++
-			} else {
-				// Если поля нет в различиях, оставляем пустые ячейки
-				col += 2
-			}
-		}
-	}
-	// Настраиваем ширину колонок для лучшего отображения
-	for i := 1; i <= len(headers); i++ {
-		f.SetColWidth("Sheet1", string(rune('A'+i-1)), string(rune('A'+i-1)), 20)
-	}
-
-	// Записываем форматирование для заголовков
-	style, _ := f.NewStyle(&excel.Style{
-		Font: &excel.Font{
-			Bold: true,
-		},
-		Fill: excel.Fill{
-			Type:    "pattern",
-			Color:   []string{"#E0E0E0"},
-			Pattern: 1,
-		},
-	})
-
-	// Применяем стиль к заголовкам
-	for i := 1; i <= len(headers); i++ {
-		cell, _ := excel.CoordinatesToCellName(i, 1)
-		f.SetCellStyle("Sheet1", cell, cell, style)
-	}
-
-	// Сохраняем файл
-	if err := f.SaveAs(filename); err != nil {
-		return err
-	}
-
-	return nil
+	return filtered
 }
