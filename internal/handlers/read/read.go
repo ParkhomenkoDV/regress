@@ -8,13 +8,14 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-func JSONFiles(dir string) ([]string, error) {
+// JSONFiles - Возвращает хэш-таблицу JSON файлов по переданному пути.
+func JSONFiles(dir string) (map[string]struct{}, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	files := make([]string, 0, len(entries))
+	files := make(map[string]struct{}, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -22,7 +23,7 @@ func JSONFiles(dir string) ([]string, error) {
 		name := entry.Name()
 		// регистронезависимая проверка расширения .json
 		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			files = append(files, name)
+			files[name] = struct{}{}
 		}
 	}
 	return files, nil
