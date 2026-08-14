@@ -1,25 +1,31 @@
 package read
 
 import (
-	"encoding/json"
 	"os"
 	"regress/internal/storage"
 	"strings"
+
+	json "github.com/goccy/go-json"
 )
 
 func JSONFiles(dir string) ([]string, error) {
-	files, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]string, 0, len(files))
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".json") {
-			result = append(result, file.Name())
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// регистронезависимая проверка расширения .json
+		if strings.HasSuffix(strings.ToLower(name), ".json") {
+			files = append(files, name)
 		}
 	}
-	return result, nil
+	return files, nil
 }
 
 func JSON(filePath string) (db storage.DB, err error) {

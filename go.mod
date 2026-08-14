@@ -2,7 +2,10 @@ module regress
 
 go 1.25
 
-require github.com/xuri/excelize/v2 v2.10.0
+require (
+	github.com/goccy/go-json v0.10.6
+	github.com/xuri/excelize/v2 v2.10.0
+)
 
 require (
 	github.com/richardlehane/mscfb v1.0.4 // indirect
