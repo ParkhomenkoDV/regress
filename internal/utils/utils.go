@@ -36,6 +36,12 @@ func IsSimpleSlice(slice []any) bool {
 
 // IsEqualSimpleSlices сравнивает два среза простых типов
 func IsEqualSimpleSlices(a, b []any) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	if len(a) != len(b) {
 		return false
 	}
@@ -69,8 +75,13 @@ func IsEqual(a, b any) bool {
 		}
 		return false
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		// Для чисел используем форматирование в строку для сравнения
-		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+		switch b.(type) {
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+			// Для чисел используем форматирование в строку для сравнения
+			return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+		default:
+			return false
+		}
 	case []any:
 		if bVal, ok := b.([]any); ok {
 			if len(aVal) != len(bVal) {
