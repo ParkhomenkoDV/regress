@@ -1,7 +1,5 @@
 package shared
 
-import "regress/internal/storage"
-
 // Difference описывает одно различие
 type Difference struct {
 	Field  string `doc:"Поле"`
@@ -12,8 +10,6 @@ type Difference struct {
 // Comparison содержит сравнение одного файла
 type Comparison struct {
 	FileName     string       `doc:"Имя файла"`
-	Before       storage.DB   `doc:"До"`
-	After        storage.DB   `doc:"После"`
-	ExistsInBoth bool         `doc:"Флаг существования в обоих файлах"`
+	ExistsInBoth bool         `doc:"Флаг существования обоих файлов"`
 	Differences  []Difference `doc:"Различия"`
 }
