@@ -1,126 +1,172 @@
 package compare
 
 import (
+	"context"
 	"fmt"
-	"path/filepath"
 	"regress/internal/handlers/read"
+	"regress/internal/progress"
 	"regress/internal/shared"
 	"regress/internal/storage"
 	"regress/internal/utils"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-type result struct {
-	fileName string
-	duration time.Duration
-	err      error
+type task struct {
+	fileName       string `doc:"Имя файла"`
+	filePathBefore string `doc:"Путь до файла ДО"`
+	filePathAfter  string `doc:"Путь до файла ПОСЛЕ"`
 }
 
-func JSONs(beforeDir, afterDir string, workers int) ([]shared.Comparison, error) {
-	// Получаем списки файлов
-	beforeFiles, err := read.JSONFiles(beforeDir)
-	if err != nil {
-		return nil, err
+type result struct {
+	shared.Comparison `doc:"Сравнение"`
+	duration          time.Duration `doc:"Время обработки"`
+	err               error         `doc:"Ошибка"`
+}
+
+func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, workers int) []shared.Comparison {
+	startTime := time.Now()
+
+	allFiles := make(map[string]task, len(filesBefore)+len(filesAfter))
+	for name, dir := range filesBefore {
+		allFiles[name] = task{fileName: name, filePathBefore: dir, filePathAfter: ""}
 	}
-	afterFiles, err := read.JSONFiles(afterDir)
-	if err != nil {
-		return nil, err
+	for name, dir := range filesAfter {
+		if t, ok := allFiles[name]; ok {
+			t.filePathAfter = dir
+			allFiles[name] = t
+		} else {
+			allFiles[name] = task{fileName: name, filePathBefore: "", filePathAfter: dir}
+		}
 	}
 
-	// Создаем мапу для быстрого поиска
-	afterMap := make(map[string]bool)
-	for _, f := range afterFiles {
-		afterMap[f] = true
+	tasks := make(chan task, len(allFiles))     // канал задач
+	results := make(chan result, len(allFiles)) // канал результатов
+
+	// Заполняем очередь задач
+	for _, t := range allFiles {
+		tasks <- t
 	}
+	close(tasks) // Закрываем смену
 
-	jobs := make(chan string, len(beforeFiles))
-	results := make(chan shared.Comparison, len(beforeFiles))
-	errors := make(chan error, len(beforeFiles))
+	var wg sync.WaitGroup // Счётчик рабочих
 
-	var wg sync.WaitGroup
+	// Атомарная статистика
+	var (
+		total        uint64
+		totalSuccess uint64
+		totalErrors  uint64
+	)
+
+	bar := progress.New(uint64(len(allFiles)), time.Second, true, false, true)
+	go bar.Show(ctx, &total, &totalSuccess, &totalErrors)
+
+	// Запускаем рабочих
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
-		go work(jobs, results, errors, beforeDir, afterDir, afterMap, &wg)
+		go work(i, &wg,
+			ctx,
+			tasks, results,
+			&total, &totalSuccess, &totalErrors)
 	}
 
-	// Отправляем задания
-	for _, file := range beforeFiles {
-		jobs <- file
-	}
-	close(jobs)
-
-	// Ждем завершения
+	// Ждём окончания смены
 	go func() {
 		wg.Wait()
 		close(results)
-		close(errors)
 	}()
 
 	// Собираем результаты
-	var comparisons []shared.Comparison
-	for result := range results {
-		comparisons = append(comparisons, result)
-	}
-
-	// Проверяем ошибки
-	select {
-	case err := <-errors:
-		if err != nil {
-			return nil, err
+	result := make([]shared.Comparison, 0, len(allFiles))
+	successCount, errorCount := 0, 0
+	for r := range results {
+		result = append(result, r.Comparison)
+		if r.err != nil {
+			errorCount++
+		} else {
+			successCount++
 		}
-	default:
 	}
 
-	return comparisons, nil
+	totalDuration := time.Since(startTime)
+
+	fmt.Println()
+	fmt.Printf("📊 ИТОГО: Успешно %d | Ошибок %d | Всего %d\n", successCount, errorCount, len(allFiles))
+	fmt.Printf("⏱️  Общее время: %v\n", totalDuration.Round(time.Millisecond))
+	fmt.Printf("⚡ Скорость: %.2f файлов/сек\n", float64(len(allFiles))/totalDuration.Seconds())
+	fmt.Println()
+
+	return result
 }
 
 func work(
-	jobs <-chan string, results chan<- shared.Comparison, errors chan<- error,
-	beforeDir, afterDir string,
-	afterMap map[string]bool,
-	wg *sync.WaitGroup,
+	i int, wg *sync.WaitGroup,
+	ctx context.Context,
+	tasks <-chan task, results chan<- result,
+	total, totalSuccess, totalErrors *uint64,
 ) {
 	defer wg.Done()
 
-	for filename := range jobs {
-		comp, err := compareFile(filename, beforeDir, afterDir, afterMap[filename])
+	for t := range tasks {
+		select {
+		case <-ctx.Done():
+			results <- result{
+				Comparison: shared.Comparison{
+					FileName: t.fileName,
+				},
+				err: ctx.Err(),
+			}
+			atomic.AddUint64(total, 1)
+			atomic.AddUint64(totalErrors, 1)
+			continue
+		default:
+		}
+
+		startTime := time.Now()
+
+		// Читаем файлы
+		jsonBefore, err := read.JSON(t.filePathBefore)
 		if err != nil {
-			errors <- fmt.Errorf("файл %s: %v", filename, err)
+			results <- result{
+				Comparison: shared.Comparison{
+					FileName: t.fileName,
+				},
+				duration: time.Since(startTime),
+				err:      err,
+			}
+			atomic.AddUint64(total, 1)
+			atomic.AddUint64(totalErrors, 1)
 			continue
 		}
-		results <- comp
-	}
-}
-
-func compareFile(filename, beforeDir, afterDir string, existsInAfter bool) (shared.Comparison, error) {
-	comparison := shared.Comparison{
-		FileName:     filename,
-		ExistsInBoth: existsInAfter,
-	}
-
-	// Читаем файл "до"
-	beforePath := filepath.Join(beforeDir, filename)
-	beforeData, err := read.JSON(beforePath)
-	if err != nil {
-		return comparison, err
-	}
-	comparison.Before = beforeData
-
-	// Читаем файл "после" если существует
-	if existsInAfter {
-		afterPath := filepath.Join(afterDir, filename)
-		afterData, err := read.JSON(afterPath)
+		jsonAfter, err := read.JSON(t.filePathAfter)
 		if err != nil {
-			return comparison, err
+			results <- result{
+				Comparison: shared.Comparison{
+					FileName: t.fileName,
+				},
+				duration: time.Since(startTime),
+				err:      err,
+			}
+			atomic.AddUint64(total, 1)
+			atomic.AddUint64(totalErrors, 1)
+			continue
 		}
-		comparison.After = afterData
 
-		// Находим различия
-		comparison.Differences = findDifferences(beforeData, afterData, "")
+		difference := findDifferences(jsonBefore, jsonAfter, "")
+
+		results <- result{
+			Comparison: shared.Comparison{
+				FileName:     t.fileName,
+				ExistsInBoth: t.filePathBefore != "" && t.filePathAfter != "",
+				Differences:  difference,
+			},
+			duration: time.Since(startTime),
+			err:      nil,
+		}
+		atomic.AddUint64(total, 1)
+		atomic.AddUint64(totalSuccess, 1)
 	}
-
-	return comparison, nil
 }
 
 func findDifferences(before, after storage.DB, prefix string) []shared.Difference {

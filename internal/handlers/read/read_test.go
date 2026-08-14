@@ -4,22 +4,22 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"testing"
 )
 
 func TestJSONFiles(t *testing.T) {
-	// 1. Создаём временную директорию с файлами
+	// Создаём временную директорию
 	tmpDir := t.TempDir()
 
+	// Подготовка тестовых файлов и поддиректорий
 	testFiles := []string{
-		"a.json",
-		"b.JSON",
-		"c.JsOn",
-		"d.txt",
-		"e",
-		".json",      // файл с именем .json (расширение и имя совпадают)
-		"f.json.bak", // не .json
+		"file1.json",
+		"file2.JSON",
+		"file3.JsOn",
+		"file4.txt",
+		"file5",
+		".hidden.json", // файл с именем .hidden.json
+		"file6.json.bak",
 	}
 	for _, f := range testFiles {
 		path := filepath.Join(tmpDir, f)
@@ -28,42 +28,47 @@ func TestJSONFiles(t *testing.T) {
 		}
 	}
 
-	// 2. Создаём поддиректорию с .json файлом (должен быть проигнорирован)
-	subDir := filepath.Join(tmpDir, "sub")
+	// Поддиректория с .json файлом – должна быть проигнорирована
+	subDir := filepath.Join(tmpDir, "subdir")
 	if err := os.Mkdir(subDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	subFile := filepath.Join(subDir, "sub.json")
-	if err := os.WriteFile(subFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(subDir, "sub.json"), []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	expected := []string{"a.json", "b.JSON", "c.JsOn", ".json"}
-	sort.Strings(expected) // порядок не гарантируется
+	// Ожидаемый результат: только файлы с расширением .json (регистронезависимо)
+	expected := map[string]string{
+		"file1.json":   filepath.Join(tmpDir, "file1.json"),
+		"file2.JSON":   filepath.Join(tmpDir, "file2.JSON"),
+		"file3.JsOn":   filepath.Join(tmpDir, "file3.JsOn"),
+		".hidden.json": filepath.Join(tmpDir, ".hidden.json"),
+		// "file6.json.bak" – не .json, не включаем
+		// файлы из поддиректории не включаем
+	}
 
 	got, err := JSONFiles(tmpDir)
 	if err != nil {
-		t.Fatalf("неожиданная ошибка: %v", err)
+		t.Fatalf("не ожидалась ошибка, получена: %v", err)
 	}
-	sort.Strings(got)
 
 	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("ожидалось %v, получено %v", expected, got)
+		t.Errorf("JSONFiles() вернул %v, ожидалось %v", got, expected)
 	}
 
-	// 3. Тест на несуществующую директорию
+	// Тест: несуществующая директория
 	_, err = JSONFiles(filepath.Join(tmpDir, "nonexistent"))
 	if err == nil {
 		t.Error("ожидалась ошибка для несуществующей директории, получено nil")
 	}
 
-	// 4. Тест на пустую директорию
+	// Тест: пустая директория
 	emptyDir := t.TempDir()
-	got, err = JSONFiles(emptyDir)
+	gotEmpty, err := JSONFiles(emptyDir)
 	if err != nil {
 		t.Fatalf("неожиданная ошибка: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("ожидался пустой слайс, получено %v", got)
+	if len(gotEmpty) != 0 {
+		t.Errorf("для пустой директории ожидалась пустая карта, получено %v", gotEmpty)
 	}
 }

@@ -2,6 +2,7 @@ package read
 
 import (
 	"os"
+	"path/filepath"
 	"regress/internal/storage"
 	"strings"
 
@@ -9,13 +10,13 @@ import (
 )
 
 // JSONFiles - Возвращает хэш-таблицу JSON файлов по переданному пути.
-func JSONFiles(dir string) (map[string]struct{}, error) {
+func JSONFiles(dir string) (map[string]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	files := make(map[string]struct{}, len(entries))
+	files := make(map[string]string, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -23,7 +24,7 @@ func JSONFiles(dir string) (map[string]struct{}, error) {
 		name := entry.Name()
 		// регистронезависимая проверка расширения .json
 		if strings.HasSuffix(strings.ToLower(name), ".json") {
-			files[name] = struct{}{}
+			files[name] = filepath.Join(dir, name)
 		}
 	}
 	return files, nil
