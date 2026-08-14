@@ -6,7 +6,7 @@ import (
 	excel "github.com/xuri/excelize/v2"
 )
 
-func Excel(comparisons []shared.Comparison, filename string) error {
+func Excel(comparisons []shared.Comparison, fileName string) error {
 	f := excel.NewFile() // Создаем новый Excel файл
 
 	// Получаем все уникальные названия полей для создания заголовков
@@ -36,10 +36,10 @@ func Excel(comparisons []shared.Comparison, filename string) error {
 	}
 
 	// Записываем данные
-	for row, comp := range comparisons {
+	for row, comparison := range comparisons {
 		// Преобразуем различия в карту для быстрого доступа
 		diffMap := make(map[string]shared.Difference)
-		for _, diff := range comp.Differences {
+		for _, diff := range comparison.Differences {
 			diffMap[diff.Field] = diff
 		}
 
@@ -48,12 +48,12 @@ func Excel(comparisons []shared.Comparison, filename string) error {
 
 		// FileName
 		cell, _ := excel.CoordinatesToCellName(col, row+2)
-		f.SetCellValue("Sheet1", cell, comp.FileName)
+		f.SetCellValue("Sheet1", cell, comparison.FileName)
 		col++
 
 		// ExistsInBoth
 		cell, _ = excel.CoordinatesToCellName(col, row+2)
-		f.SetCellValue("Sheet1", cell, comp.ExistsInBoth)
+		f.SetCellValue("Sheet1", cell, comparison.ExistsInBoth)
 		col++
 
 		// Данные для каждого поля
@@ -98,7 +98,7 @@ func Excel(comparisons []shared.Comparison, filename string) error {
 	}
 
 	// Сохраняем файл
-	if err := f.SaveAs(filename); err != nil {
+	if err := f.SaveAs(fileName); err != nil {
 		return err
 	}
 
