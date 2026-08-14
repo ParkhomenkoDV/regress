@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 )
 
@@ -22,8 +23,14 @@ func New() (*Config, error) {
 	if flags.Before == "" {
 		return &Config{}, fmt.Errorf("empty dir before %s", flags.Before)
 	}
+	if _, err := os.Stat(flags.Before); os.IsNotExist(err) {
+		return &Config{}, fmt.Errorf("no found dir:%s", flags.Before)
+	}
 	if flags.After == "" {
 		return &Config{}, fmt.Errorf("empty dir after %s", flags.After)
+	}
+	if _, err := os.Stat(flags.Before); os.IsNotExist(err) {
+		return &Config{}, fmt.Errorf("no found dir:%s", flags.Before)
 	}
 	if flags.Workers < 1 {
 		return &Config{}, fmt.Errorf("workers=%d must be >= 1", flags.Workers)
