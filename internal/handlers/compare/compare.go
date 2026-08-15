@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"regress/internal/handlers/read"
-	"regress/internal/progress"
 	"regress/internal/shared"
 	"regress/internal/storage"
 	"regress/internal/utils"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ParkhomenkoDV/progress"
 )
 
 type task struct {
@@ -59,7 +60,7 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 		totalErrors  uint64
 	)
 
-	bar := progress.New(uint64(len(allFiles)), time.Second, true, false, true)
+	bar := progress.New("⏳ ", time.Second, uint64(len(allFiles)), true, false, true)
 	go bar.Show(ctx, &total, &totalSuccess, &totalErrors)
 
 	// Запускаем рабочих

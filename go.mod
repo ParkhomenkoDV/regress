@@ -3,6 +3,7 @@ module regress
 go 1.25
 
 require (
+	github.com/ParkhomenkoDV/progress v0.0.0-20260815185901-9f8d9b4ca832
 	github.com/goccy/go-json v0.10.6
 	github.com/xuri/excelize/v2 v2.10.0
 )
