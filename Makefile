@@ -73,11 +73,11 @@ doc:
 
 run:
 	@echo "$(BLUE)Running project...$(RESET)"
-	go run poster.go -log=info
+	go run regress.go
 
 build:
 	@echo "$(BLUE)Building project...$(RESET)"
-	go build -o poster poster.go 
+	go build -o regress regress.go 
 
 clear:
 	@echo "$(BLUE)Cleaning project...$(RESET)"

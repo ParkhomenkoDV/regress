@@ -55,13 +55,12 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 
 	// Атомарная статистика
 	var (
-		total        uint64
-		totalSuccess uint64
-		totalErrors  uint64
+		total       uint64
+		totalErrors uint64
 	)
 
-	bar := progress.New("⏳ ", time.Second, uint64(len(allFiles)), true, false, true)
-	go bar.Show(ctx, &total, &totalSuccess, &totalErrors)
+	bar := progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true)
+	go bar.Show(ctx, &total, &totalErrors)
 
 	// Запускаем рабочих
 	for i := 0; i < workers; i++ {
@@ -69,7 +68,7 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 		go work(i, &wg,
 			ctx,
 			tasks, results,
-			&total, &totalSuccess, &totalErrors)
+			&total, &totalErrors)
 	}
 
 	// Ждём окончания смены
@@ -105,11 +104,12 @@ func work(
 	i int, wg *sync.WaitGroup,
 	ctx context.Context,
 	tasks <-chan task, results chan<- result,
-	total, totalSuccess, totalErrors *uint64,
+	total, totalErrors *uint64,
 ) {
 	defer wg.Done()
 
 	for t := range tasks {
+		time.Sleep(100 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			results <- result{
@@ -166,7 +166,6 @@ func work(
 			err:      nil,
 		}
 		atomic.AddUint64(total, 1)
-		atomic.AddUint64(totalSuccess, 1)
 	}
 }
 
