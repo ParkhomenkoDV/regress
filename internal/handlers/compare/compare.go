@@ -52,10 +52,10 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 	close(tasks) // Закрываем смену
 
 	var (
-		total, totalErrors uint64 // Атомарные счетчики
-		bar                = progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true, false)
+		done, errs uint64 // Атомарные счетчики
+		bar        = progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true, false)
 	)
-	cancelBar := bar.Start(context.Background(), &total, &totalErrors)
+	cancelBar := bar.Start(context.Background(), &done, &errs)
 
 	var wg sync.WaitGroup // Счётчик рабочих
 	// Запускаем рабочих
@@ -64,7 +64,7 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 		go work(i, &wg,
 			ctx,
 			tasks, results,
-			&total, &totalErrors)
+			&done, &errs)
 	}
 
 	// Ждём окончания смены
