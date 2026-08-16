@@ -107,7 +107,6 @@ func work(
 	defer wg.Done()
 
 	for t := range tasks {
-		time.Sleep(50 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			results <- result{
