@@ -52,16 +52,10 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 	close(tasks) // Закрываем смену
 
 	var (
-		total, totalErrors uint64         // Атомарные счетчики
-		wgBar              sync.WaitGroup // ждун
+		total, totalErrors uint64 // Атомарные счетчики
 		bar                = progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true, false)
-		ctxBar, cancelBar  = context.WithCancel(ctx)
 	)
-	wgBar.Add(1)
-	go func() {
-		defer wgBar.Done()
-		bar.Show(ctxBar, &total, &totalErrors)
-	}()
+	cancelBar := bar.Start(context.Background(), &total, &totalErrors)
 
 	var wg sync.WaitGroup // Счётчик рабочих
 	// Запускаем рабочих
@@ -92,12 +86,11 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 	}
 
 	cancelBar()
-	wgBar.Wait()
 
 	totalDuration := time.Since(startTime)
 
 	fmt.Println()
-	fmt.Printf("📊 ИТОГО: Успешно %d | Ошибок %d | Всего %d\n", successCount, errorCount, len(allFiles))
+	fmt.Printf("📊 ИТОГО: ✅ %d ❌ %d\n", successCount, errorCount)
 	fmt.Printf("⏰ Общее время: %v\n", totalDuration.Round(time.Millisecond))
 	fmt.Printf("⚡️ Скорость: %.2f файлов/сек\n", float64(len(allFiles))/totalDuration.Seconds())
 	fmt.Println()
