@@ -8,7 +8,6 @@ import (
 	"regress/internal/storage"
 	"regress/internal/utils"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ParkhomenkoDV/progress"
@@ -51,20 +50,16 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 	}
 	close(tasks) // Закрываем смену
 
-	var (
-		done, errs uint64 // Атомарные счетчики
-		bar        = progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true, false)
-	)
-	cancelBar := bar.Start(context.Background(), &done, &errs)
+	bar := progress.New(time.Second, "⏳", 50, uint64(len(allFiles)), true, true, false)
+	cancelBar := bar.Start(context.Background())
 
 	var wg sync.WaitGroup // Счётчик рабочих
 	// Запускаем рабочих
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go work(i, &wg,
-			ctx,
-			tasks, results,
-			&done, &errs)
+			ctx, bar,
+			tasks, results)
 	}
 
 	// Ждём окончания смены
@@ -101,8 +96,8 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 func work(
 	i int, wg *sync.WaitGroup,
 	ctx context.Context,
+	bar *progress.Bar,
 	tasks <-chan task, results chan<- result,
-	total, totalErrors *uint64,
 ) {
 	defer wg.Done()
 
@@ -115,8 +110,8 @@ func work(
 				},
 				err: ctx.Err(),
 			}
-			atomic.AddUint64(total, 1)
-			atomic.AddUint64(totalErrors, 1)
+			bar.AddError(1)
+			bar.Add(1)
 			continue
 		default:
 		}
@@ -133,8 +128,8 @@ func work(
 				duration: time.Since(startTime),
 				err:      err,
 			}
-			atomic.AddUint64(total, 1)
-			atomic.AddUint64(totalErrors, 1)
+			bar.AddError(1)
+			bar.Add(1)
 			continue
 		}
 		jsonAfter, err := read.JSON(t.filePathAfter)
@@ -146,8 +141,8 @@ func work(
 				duration: time.Since(startTime),
 				err:      err,
 			}
-			atomic.AddUint64(total, 1)
-			atomic.AddUint64(totalErrors, 1)
+			bar.AddError(1)
+			bar.Add(1)
 			continue
 		}
 
@@ -162,7 +157,8 @@ func work(
 			duration: time.Since(startTime),
 			err:      nil,
 		}
-		atomic.AddUint64(total, 1)
+
+		bar.Add(1)
 	}
 }
 
