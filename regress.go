@@ -8,6 +8,7 @@ import (
 	"regress/internal/config"
 	"regress/internal/handlers/compare"
 	"regress/internal/handlers/export"
+	"regress/internal/handlers/filter"
 	"regress/internal/handlers/read"
 	"regress/internal/shared"
 	"syscall"
@@ -57,7 +58,7 @@ func main() {
 
 	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
 
-	filtered := filterComparisons(comparisons, cfg.ShowAll) // Фильтруем, если нужно показывать только изменения
+	filtered := filter.ShowAll(comparisons, cfg.ShowAll) // Фильтруем, если нужно показывать только изменения
 
 	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format("2006-01-02 15:04:05"))
 
@@ -67,30 +68,23 @@ func main() {
 		return
 	}
 
+	fmt.Printf("[%v] Экспорт в html...\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	err = export.HTML(filtered, "comparison.html")
+	if err != nil {
+		fmt.Printf("ошибка экспорта в html: %v", err)
+		return
+	}
+
 	fmt.Printf("[%v] Готово!\n", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func countChanged(comparisons []shared.Comparison) int {
 	count := 0
 	for _, comparison := range comparisons {
-		if comparison.ExistsInBoth && len(comparison.Differences) > 0 {
+		if comparison.ExistsInBoth() && len(comparison.Differences) > 0 {
 			count++
 		}
 	}
 	return count
-}
-
-// filterComparisons фильтрует сравнения по настройкам
-func filterComparisons(comparisons []shared.Comparison, showAll bool) []shared.Comparison {
-	if showAll {
-		return comparisons
-	}
-
-	filtered := make([]shared.Comparison, 0, len(comparisons))
-	for _, comp := range comparisons {
-		if len(comp.Differences) > 0 || !comp.ExistsInBoth {
-			filtered = append(filtered, comp)
-		}
-	}
-	return filtered
 }

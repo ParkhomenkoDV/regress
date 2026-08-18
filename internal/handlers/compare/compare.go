@@ -151,7 +151,8 @@ func work(
 		results <- result{
 			Comparison: shared.Comparison{
 				FileName:     t.fileName,
-				ExistsInBoth: t.filePathBefore != "" && t.filePathAfter != "",
+				ExistsBefore: t.filePathBefore != "",
+				ExistsAfter:  t.filePathAfter != "",
 				Differences:  difference,
 			},
 			duration: time.Since(startTime),

@@ -10,6 +10,12 @@ type Difference struct {
 // Comparison содержит сравнение одного файла
 type Comparison struct {
 	FileName     string       `doc:"Имя файла"`
-	ExistsInBoth bool         `doc:"Флаг существования обоих файлов"`
+	ExistsBefore bool         `doc:"Флаг существования в BEFORE"`
+	ExistsAfter  bool         `doc:"Флаг существования в AFTER"`
 	Differences  []Difference `doc:"Различия"`
+}
+
+// Существует в обоих файлах: before и after.
+func (c *Comparison) ExistsInBoth() bool {
+	return c.ExistsBefore && c.ExistsAfter
 }

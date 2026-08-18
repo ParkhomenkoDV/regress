@@ -53,7 +53,7 @@ func Excel(comparisons []shared.Comparison, fileName string) error {
 
 		// ExistsInBoth
 		cell, _ = excel.CoordinatesToCellName(col, row+2)
-		f.SetCellValue("Sheet1", cell, comparison.ExistsInBoth)
+		f.SetCellValue("Sheet1", cell, comparison.ExistsInBoth())
 		col++
 
 		// Данные для каждого поля
