@@ -53,6 +53,12 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		return fmt.Errorf("создание папки: %w", err)
 	}
 
+	// Создаём подпапку для детальных страниц
+	detailsDir := filepath.Join(folderName, "details")
+	if err := os.MkdirAll(detailsDir, 0755); err != nil {
+		return fmt.Errorf("создание папки details: %w", err)
+	}
+
 	// 2. Собираем данные по полям
 	fieldMap := make(map[string][]FieldFileInfo) // field -> список изменений
 	var missing []MissingFile
@@ -92,18 +98,18 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		sort.Slice(records, func(i, j int) bool {
 			return records[i].FileName < records[j].FileName
 		})
-		// Сохраняем детали в отдельный HTML-файл
+		// Сохраняем детали в отдельный HTML-файл внутри подпапки details
 		detailFileName := sanitizeFileName(field) + ".html"
-		detailPath := filepath.Join(folderName, detailFileName)
+		detailPath := filepath.Join(detailsDir, detailFileName)
 		if err := writeFieldPage(detailPath, field, records); err != nil {
 			return fmt.Errorf("ошибка создания страницы для поля %s: %w", field, err)
 		}
-		// Добавляем запись для главной страницы
+		// Добавляем запись для главной страницы, ссылка указывает на подпапку details
 		fields = append(fields, FieldSummary{
 			Field:      field,
 			Action:     action,
 			Changes:    len(records),
-			DetailLink: detailFileName,
+			DetailLink: "details/" + detailFileName, // относительный путь от regress.html
 		})
 	}
 	// Сортируем поля по имени
@@ -276,7 +282,7 @@ const fieldTemplate = `
     </style>
 </head>
 <body>
-    <div class="back"><a href="regress.html">← Back to regress</a></div>
+    <div class="back"><a href="../regress.html">← Back to regress</a></div>
     <h1>Field: {{.Field}}</h1>
     <table>
         <thead>
