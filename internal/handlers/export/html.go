@@ -6,113 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"regress/internal/shared"
 )
-
-const tmpl = `
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Regress Report</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1, h2 { color: #333; }
-        .stat { margin-bottom: 20px; }
-        .field-list { list-style: none; padding: 0; }
-        .field-list li { margin: 5px 0; }
-        .field-list a { text-decoration: none; color: #0066cc; cursor: pointer; }
-        .field-list a:hover { text-decoration: underline; }
-        .detail { display: none; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
-        .detail.active { display: block; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .missing { color: #cc0000; }
-        .badge { background: #f0f0f0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; }
-    </style>
-    <script>
-        function showDetail(fieldId) {
-            // Скрыть все активные детали
-            document.querySelectorAll('.detail').forEach(el => el.classList.remove('active'));
-            // Показать нужную
-            const el = document.getElementById('detail-' + fieldId);
-            if (el) el.classList.add('active');
-            // Обновить URL с якорем для возможности прямой ссылки
-            if (history.pushState) {
-                history.pushState(null, null, '#' + fieldId);
-            }
-        }
-        // При загрузке проверяем якорь
-        window.onload = function() {
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                showDetail(hash);
-            }
-        };
-    </script>
-</head>
-<body>
-    <h1>Отчёт о регрессе</h1>
-    <div class="stat">
-        <p>Всего файлов: <strong>{{.TotalFiles}}</strong></p>
-        <p>Файлов с изменениями: <strong>{{.ChangedFiles}}</strong></p>
-        {{if .MissingFiles}}
-        <p class="missing">Отсутствующих файлов: <strong>{{len .MissingFiles}}</strong></p>
-        {{end}}
-    </div>
-
-    <h2>Список полей с изменениями</h2>
-    <ul class="field-list">
-        {{range .Fields}}
-        <li><a onclick="showDetail('{{.Name}}'); return false;" href="#{{.Name}}">{{.Name}} <span class="badge">{{.FileCount}} файлов</span></a></li>
-        {{else}}
-        <li>Нет изменений.</li>
-        {{end}}
-    </ul>
-
-    {{range .Fields}}
-    <div id="detail-{{.Name}}" class="detail">
-        <h3>Поле: {{.Name}}</h3>
-        <table>
-            <thead>
-                <tr><th>Файл</th><th>Было</th><th>Стало</th></tr>
-            </thead>
-            <tbody>
-                {{range .Files}}
-                <tr><td>{{.FileName}}</td><td>{{.Before}}</td><td>{{.After}}</td></tr>
-                {{end}}
-            </tbody>
-        </table>
-    </div>
-    {{end}}
-
-    {{if .MissingFiles}}
-    <h2>Отсутствующие файлы</h2>
-    <ul>
-        {{range .MissingFiles}}
-        <li class="missing">{{.FileName}} ({{.Side}})</li>
-        {{end}}
-    </ul>
-    {{end}}
-</body>
-</html>
-`
-
-// FieldChange описывает изменение одного поля в одном файле
-type FieldChange struct {
-	FileName string
-	Before   string
-	After    string
-}
-
-// FieldReport содержит информацию по одному полю
-type FieldReport struct {
-	Name      string
-	FileCount int
-	Files     []FieldChange
-}
 
 // MissingFile описывает отсутствующий файл
 type MissingFile struct {
@@ -120,112 +17,296 @@ type MissingFile struct {
 	Side     string // "before" или "after"
 }
 
-// ReportData — данные для шаблона
-type ReportData struct {
-	TotalFiles   int
-	ChangedFiles int
-	MissingFiles []MissingFile
-	Fields       []FieldReport
+// FieldFileInfo описывает изменение одного поля в одном файле
+type FieldFileInfo struct {
+	FileName string
+	Action   string // "change", "add", "del"
+	Before   any
+	After    any
 }
 
-// HTML создаёт HTML-отчёт о регрессе
-func HTML(comparisons []shared.Comparison, fileName string) error {
-	// 1. Собираем статистику и изменения по полям
-	fieldMap := make(map[string]map[string]FieldChange) // field -> (fileName -> FieldChange)
+// FieldSummary используется для строки таблицы на главной странице
+type FieldSummary struct {
+	Field      string
+	Action     string
+	Changes    int
+	DetailLink string
+}
+
+// FieldDetail используется для страницы конкретного поля
+type FieldDetail struct {
+	Field   string
+	Records []FieldFileInfo
+}
+
+// Report — данные для главной страницы
+type Report struct {
+	TotalFiles   uint
+	ChangedFiles uint
+	MissingFiles []MissingFile
+	Fields       []FieldSummary
+}
+
+// HTML создаёт папку с HTML-отчётами о регрессе
+func HTML(comparisons []shared.Comparison, folderName string) error {
+	if err := os.MkdirAll(folderName, 0755); err != nil {
+		return fmt.Errorf("создание папки: %w", err)
+	}
+
+	// 2. Собираем данные по полям
+	fieldMap := make(map[string][]FieldFileInfo) // field -> список изменений
 	var missing []MissingFile
 
-	for _, comp := range comparisons {
-		if !comp.ExistsInBoth() {
-			side := "after"
-			_ = side
-			// определить сторону можно по наличию файла? В текущей структуре нет информации,
-			// поэтому будем считать, что если файла нет в after, то он только в before.
-			// Но у нас нет явного указания, в какой из директорий файл отсутствует.
-			// В структуре Comparison нет поля, указывающего, с какой стороны отсутствует.
-			// Придётся сделать допущение: если ExistsInBoth == false, мы не знаем, где файл отсутствует.
-			// В реальности такая ситуация возникает, если файл есть только в before или только в after.
-			// Можно передать дополнительную информацию, но сейчас просто отметим как "missing".
-			missing = append(missing, MissingFile{FileName: comp.FileName, Side: "unknown"})
+	for _, comparison := range comparisons {
+		if !comparison.ExistsInBoth() {
+			// Файл отсутствует в одной из сторон – добавляем в missing (без информации о полях)
+			side := "unknown"
+			if comparison.ExistsBefore && !comparison.ExistsAfter {
+				side = "before"
+			} else if !comparison.ExistsBefore && comparison.ExistsAfter {
+				side = "after"
+			}
+			missing = append(missing, MissingFile{FileName: comparison.FileName, Side: side})
 			continue
 		}
-		if len(comp.Differences) == 0 {
+		if len(comparison.Differences) == 0 {
 			continue // нет изменений
 		}
-		// Для каждого различия добавляем в карту
-		for _, diff := range comp.Differences {
-			field := diff.Field
-			if _, ok := fieldMap[field]; !ok {
-				fieldMap[field] = make(map[string]FieldChange)
-			}
-			// Если для этого файла уже есть запись по этому полю (маловероятно, но перезапишем)
-			fieldMap[field][comp.FileName] = FieldChange{
-				FileName: comp.FileName,
-				Before:   fmt.Sprint(diff.Before),
-				After:    fmt.Sprint(diff.After),
-			}
+		for _, diff := range comparison.Differences {
+			action := determineAction(diff.Before, diff.After)
+			fieldMap[diff.Field] = append(fieldMap[diff.Field], FieldFileInfo{
+				FileName: comparison.FileName,
+				Action:   action,
+				Before:   diff.Before,
+				After:    diff.After,
+			})
 		}
 	}
 
-	// 2. Преобразуем карту в срез FieldReport
-	fields := make([]FieldReport, 0, len(fieldMap))
-	for field, fileMap := range fieldMap {
-		files := make([]FieldChange, 0, len(fileMap))
-		for _, fc := range fileMap {
-			files = append(files, fc)
-		}
-		// сортируем по имени файла для стабильности
-		sort.Slice(files, func(i, j int) bool {
-			return files[i].FileName < files[j].FileName
+	// 3. Преобразуем в срез для главной страницы и генерируем файлы полей
+	fields := make([]FieldSummary, 0, len(fieldMap))
+	for field, records := range fieldMap {
+		// Определяем общий action для поля
+		action := aggregateAction(records)
+		// Сортируем записи по имени файла для стабильности
+		sort.Slice(records, func(i, j int) bool {
+			return records[i].FileName < records[j].FileName
 		})
-		fields = append(fields, FieldReport{
-			Name:      field,
-			FileCount: len(files),
-			Files:     files,
+		// Сохраняем детали в отдельный HTML-файл
+		detailFileName := sanitizeFileName(field) + ".html"
+		detailPath := filepath.Join(folderName, detailFileName)
+		if err := writeFieldPage(detailPath, field, records); err != nil {
+			return fmt.Errorf("ошибка создания страницы для поля %s: %w", field, err)
+		}
+		// Добавляем запись для главной страницы
+		fields = append(fields, FieldSummary{
+			Field:      field,
+			Action:     action,
+			Changes:    len(records),
+			DetailLink: detailFileName,
 		})
 	}
 	// Сортируем поля по имени
 	sort.Slice(fields, func(i, j int) bool {
-		return fields[i].Name < fields[j].Name
+		return fields[i].Field < fields[j].Field
 	})
 
-	// 3. Считаем общую статистику
-	totalFiles := len(comparisons)
-	changedFiles := 0
-	for _, comp := range comparisons {
-		if comp.ExistsInBoth() && len(comp.Differences) > 0 {
+	// 4. Считаем общую статистику
+	var changedFiles uint
+	for _, comparison := range comparisons {
+		if comparison.ExistsInBoth() && len(comparison.Differences) > 0 {
 			changedFiles++
 		}
 	}
 
-	// 4. Подготавливаем данные для шаблона
-	data := ReportData{
-		TotalFiles:   totalFiles,
+	// 5. Генерируем главную страницу
+	data := Report{
+		TotalFiles:   uint(len(comparisons)),
 		ChangedFiles: changedFiles,
 		MissingFiles: missing,
 		Fields:       fields,
 	}
-
-	// 5. Загружаем и выполняем шаблон
-	t, err := template.New("report").Parse(tmpl)
-	if err != nil {
-		return fmt.Errorf("парсинг шаблона: %w", err)
-	}
-
-	// Создаём директорию, если её нет
-	dir := filepath.Dir(fileName)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("создание директории: %w", err)
-	}
-
-	file, err := os.Create(fileName)
-	if err != nil {
-		return fmt.Errorf("создание файла: %w", err)
-	}
-	defer file.Close()
-
-	if err := t.Execute(file, data); err != nil {
-		return fmt.Errorf("выполнение шаблона: %w", err)
+	mainPath := filepath.Join(folderName, "regress.html")
+	if err := writeMainPage(mainPath, data); err != nil {
+		return fmt.Errorf("ошибка создания главной страницы: %w", err)
 	}
 
 	return nil
+}
+
+// determineAction определяет тип изменения по значениям до и после
+func determineAction(before, after any) string {
+	switch {
+	case before == nil && after != nil:
+		return "add"
+	case before != nil && after == nil:
+		return "del"
+	default:
+		return "change"
+	}
+}
+
+// aggregateAction определяет общее действие для поля (приоритет: del > add > change)
+func aggregateAction(records []FieldFileInfo) string {
+	hasDel, hasAdd, hasChange := false, false, false
+	for _, r := range records {
+		switch r.Action {
+		case "del":
+			hasDel = true
+		case "add":
+			hasAdd = true
+		default:
+			hasChange = true
+		}
+	}
+	if hasDel {
+		return "del"
+	}
+	if hasAdd {
+		return "add"
+	}
+	if hasChange {
+		return "change"
+	}
+	return ""
+}
+
+// sanitizeFileName заменяет небезопасные символы на '_'
+func sanitizeFileName(name string) string {
+	// Заменяем все символы, кроме букв, цифр, точки, дефиса и подчеркивания
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, name)
+}
+
+const mainTemplate = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Regress – main</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1, h2 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .missing { color: #cc0000; }
+        .badge { background: #f0f0f0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; }
+        .action-change { color: #0066cc; }
+        .action-add { color: #008000; }
+        .action-del { color: #cc0000; }
+        .stat-number { color: #0066cc; }
+    </style>
+</head>
+<body>
+    <h1>Regress</h1>
+    <div class="stat">
+        <p>Total: <strong>{{.TotalFiles}}</strong></p>
+        <p class="stat-number">Changes: <strong>{{.ChangedFiles}}</strong></p>
+        {{if .MissingFiles}}
+        <p class="missing">NMiss: <strong>{{len .MissingFiles}}</strong></p>
+        {{end}}
+    </div>
+
+    <h2>Diffs</h2>
+    <table>
+        <thead>
+            <tr><th>Action</th><th>Field</th><th>NDiff</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+        {{range .Fields}}
+        <tr>
+            <td><span class="action-{{.Action}}">{{.Action}}</span></td>
+            <td>{{.Field}}</td>
+            <td>{{.Changes}}</td>
+            <td><a href="{{.DetailLink}}">more</a></td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">Нет изменений.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+
+    {{if .MissingFiles}}
+    <h2>Missings</h2>
+    <ul>
+        {{range .MissingFiles}}
+        <li class="missing">{{.FileName}} ({{.Side}})</li>
+        {{end}}
+    </ul>
+    {{end}}
+</body>
+</html>`
+
+// writeMainPage записывает главную страницу
+func writeMainPage(path string, data Report) error {
+	t, err := template.New("main").Parse(mainTemplate)
+	if err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return t.Execute(file, data)
+}
+
+const fieldTemplate = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Field: {{.Field}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .action-change { color: #0066cc; }
+        .action-add { color: #008000; }
+        .action-del { color: #cc0000; }
+        .back { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="back"><a href="regress.html">← Back to regress</a></div>
+    <h1>Field: {{.Field}}</h1>
+    <table>
+        <thead>
+            <tr><th>File</th><th>Before</th><th>After</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+        {{range .Records}}
+        <tr>
+            <td>{{.FileName}}</td>
+            <td>{{.Before}}</td>
+            <td>{{.After}}</td>
+            <td><span class="action-{{.Action}}">{{.Action}}</span></td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</body>
+</html>`
+
+// writeFieldPage записывает страницу для одного поля
+func writeFieldPage(path, field string, records []FieldFileInfo) error {
+	data := FieldDetail{Field: field, Records: records}
+	t, err := template.New("field").Parse(fieldTemplate)
+	if err != nil {
+		return err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return t.Execute(file, data)
 }
