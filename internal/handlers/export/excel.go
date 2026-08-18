@@ -26,7 +26,7 @@ func Excel(comparisons []shared.Comparison, fileName string) error {
 	// Создаем заголовки
 	headers := []string{"FileName", "ExistsInBoth"}
 	for _, field := range fields {
-		headers = append(headers, field+"_before", field+"_after")
+		headers = append(headers, field+"_"+before, field+"_"+after)
 	}
 
 	// Записываем заголовки в первую строку

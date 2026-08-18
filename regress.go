@@ -58,6 +58,14 @@ func main() {
 
 	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
 
+	fmt.Printf("[%v] Экспорт в html...\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	err = export.HTML(comparisons, "comparison")
+	if err != nil {
+		fmt.Printf("ошибка экспорта в html: %v", err)
+		return
+	}
+
 	if !cfg.ShowAll { // Фильтруем, если нужно показывать только изменения
 		comparisons = filter.Diff(comparisons)
 	}
@@ -67,14 +75,6 @@ func main() {
 	err = export.Excel(comparisons, "comparison.xlsx")
 	if err != nil {
 		fmt.Printf("ошибка экспорта в excel: %v", err)
-		return
-	}
-
-	fmt.Printf("[%v] Экспорт в html...\n", time.Now().Format("2006-01-02 15:04:05"))
-
-	err = export.HTML(comparisons, "comparison")
-	if err != nil {
-		fmt.Printf("ошибка экспорта в html: %v", err)
 		return
 	}
 

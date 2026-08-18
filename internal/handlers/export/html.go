@@ -11,26 +11,26 @@ import (
 	"regress/internal/shared"
 )
 
-// MissingFile описывает отсутствующий файл
-type MissingFile struct {
+// Missing описывает отсутствующий файл
+type Missing struct {
 	FileName string
 	Side     string // "before" или "after"
-}
-
-// FieldFileInfo описывает изменение одного поля в одном файле
-type FieldFileInfo struct {
-	FileName string
-	Action   string // "change", "add", "del"
-	Before   any
-	After    any
 }
 
 // FieldSummary используется для строки таблицы на главной странице
 type FieldSummary struct {
 	Field      string
-	Action     string
-	Changes    int
+	Action     action
+	Changes    uint64
 	DetailLink string
+}
+
+// FieldFileInfo описывает изменение одного поля в одном файле
+type FieldFileInfo struct {
+	FileName string
+	Action   action // "change", "add", "del"
+	Before   any
+	After    any
 }
 
 // FieldDetail используется для страницы конкретного поля
@@ -43,36 +43,36 @@ type FieldDetail struct {
 type Report struct {
 	TotalFiles   uint
 	ChangedFiles uint
-	MissingFiles []MissingFile
+	Missings     []Missing
 	Fields       []FieldSummary
 }
 
 // HTML создаёт папку с HTML-отчётами о регрессе
 func HTML(comparisons []shared.Comparison, folderName string) error {
+	// Создаём папку для регресса
 	if err := os.MkdirAll(folderName, 0755); err != nil {
 		return fmt.Errorf("создание папки: %w", err)
 	}
-
 	// Создаём подпапку для детальных страниц
 	detailsDir := filepath.Join(folderName, "details")
 	if err := os.MkdirAll(detailsDir, 0755); err != nil {
 		return fmt.Errorf("создание папки details: %w", err)
 	}
 
-	// 2. Собираем данные по полям
+	// Собираем данные по полям
 	fieldMap := make(map[string][]FieldFileInfo) // field -> список изменений
-	var missing []MissingFile
+	var missing []Missing
 
 	for _, comparison := range comparisons {
 		if !comparison.ExistsInBoth() {
 			// Файл отсутствует в одной из сторон – добавляем в missing (без информации о полях)
 			side := "unknown"
 			if comparison.ExistsBefore && !comparison.ExistsAfter {
-				side = "before"
+				side = before
 			} else if !comparison.ExistsBefore && comparison.ExistsAfter {
-				side = "after"
+				side = after
 			}
-			missing = append(missing, MissingFile{FileName: comparison.FileName, Side: side})
+			missing = append(missing, Missing{FileName: comparison.FileName, Side: side})
 			continue
 		}
 		if len(comparison.Differences) == 0 {
@@ -108,7 +108,7 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		fields = append(fields, FieldSummary{
 			Field:      field,
 			Action:     action,
-			Changes:    len(records),
+			Changes:    uint64(len(records)),
 			DetailLink: "details/" + detailFileName, // относительный путь от regress.html
 		})
 	}
@@ -129,7 +129,7 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 	data := Report{
 		TotalFiles:   uint(len(comparisons)),
 		ChangedFiles: changedFiles,
-		MissingFiles: missing,
+		Missings:     missing,
 		Fields:       fields,
 	}
 	mainPath := filepath.Join(folderName, "regress.html")
@@ -141,19 +141,19 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 }
 
 // determineAction определяет тип изменения по значениям до и после
-func determineAction(before, after any) string {
+func determineAction(before, after any) action {
 	switch {
 	case before == nil && after != nil:
-		return "add"
+		return add
 	case before != nil && after == nil:
-		return "del"
+		return del
 	default:
-		return "change"
+		return change
 	}
 }
 
 // aggregateAction определяет общее действие для поля (приоритет: del > add > change)
-func aggregateAction(records []FieldFileInfo) string {
+func aggregateAction(records []FieldFileInfo) action {
 	hasDel, hasAdd, hasChange := false, false, false
 	for _, r := range records {
 		switch r.Action {
@@ -166,13 +166,13 @@ func aggregateAction(records []FieldFileInfo) string {
 		}
 	}
 	if hasDel {
-		return "del"
+		return del
 	}
 	if hasAdd {
-		return "add"
+		return add
 	}
 	if hasChange {
-		return "change"
+		return change
 	}
 	return ""
 }
@@ -214,12 +214,12 @@ const mainTemplate = `
     <div class="stat">
         <p>Total: <strong>{{.TotalFiles}}</strong></p>
         <p class="stat-number">Changes: <strong>{{.ChangedFiles}}</strong></p>
-        {{if .MissingFiles}}
-        <p class="missing">NMiss: <strong>{{len .MissingFiles}}</strong></p>
+        {{if .Missings}}
+        <p class="missing">NMiss: <strong>{{len .Missings}}</strong></p>
         {{end}}
     </div>
 
-    <h2>Diffs</h2>
+    <h2>Differences</h2>
     <table>
         <thead>
             <tr><th>Action</th><th>Field</th><th>NDiff</th><th>Details</th></tr>
@@ -233,15 +233,15 @@ const mainTemplate = `
             <td><a href="{{.DetailLink}}">more</a></td>
         </tr>
         {{else}}
-        <tr><td colspan="4">Нет изменений.</td></tr>
+        <tr><td colspan="4">Equal</td></tr>
         {{end}}
         </tbody>
     </table>
 
-    {{if .MissingFiles}}
+    {{if .Missings}}
     <h2>Missings</h2>
     <ul>
-        {{range .MissingFiles}}
+        {{range .Missings}}
         <li class="missing">{{.FileName}} ({{.Side}})</li>
         {{end}}
     </ul>
