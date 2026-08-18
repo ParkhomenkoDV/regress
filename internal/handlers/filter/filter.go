@@ -2,13 +2,9 @@ package filter
 
 import "regress/internal/shared"
 
-// ShowAll фильтрует сравнения по настройкам
-func ShowAll(comparisons []shared.Comparison, showAll bool) []shared.Comparison {
-	if showAll {
-		return comparisons
-	}
-
-	filtered := make([]shared.Comparison, 0, len(comparisons))
+// Diff фильтрует сравнения
+func Diff(comparisons []shared.Comparison) (filtered []shared.Comparison) {
+	filtered = make([]shared.Comparison, 0, len(comparisons))
 	for _, comp := range comparisons {
 		if len(comp.Differences) > 0 || !comp.ExistsInBoth() {
 			filtered = append(filtered, comp)
