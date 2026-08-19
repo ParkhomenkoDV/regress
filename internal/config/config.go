@@ -40,10 +40,26 @@ func New() (*Config, error) {
 }
 
 func parse() (*Config, error) {
-	before := flag.String("before", "before", "Директория с исходными JSON файлами")
-	after := flag.String("after", "after", "Директория с измененными JSON файлами")
-	showAll := flag.Bool("all", false, "Показать все файлы (даже без изменений)")
-	workers := flag.Int("workers", runtime.NumCPU(), "Количество параллельных воркеров")
+	before := flag.String(
+		"before",
+		"before",
+		"Директория с исходными JSON файлами",
+	)
+	after := flag.String(
+		"after",
+		"after",
+		"Директория с измененными JSON файлами",
+	)
+	showAll := flag.Bool(
+		"all",
+		false,
+		"Показать все файлы (даже без изменений)",
+	)
+	workers := flag.Int(
+		"workers",
+		runtime.NumCPU(),
+		"Количество параллельных воркеров",
+	)
 
 	flag.Parse()
 
