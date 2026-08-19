@@ -1,14 +1,18 @@
 package export
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"regress/internal/shared"
+
+	"github.com/ParkhomenkoDV/progress"
 )
 
 // Missing описывает отсутствующий файл
@@ -89,7 +93,10 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		}
 	}
 
-	// 3. Преобразуем в срез для главной страницы и генерируем файлы полей
+	bar := progress.New(time.Second, "🧾 HTML:", 50, uint64(len(comparisons)), true, true, false)
+	cancelBar := bar.Start(context.Background())
+
+	// Преобразуем в срез для главной страницы и генерируем файлы полей
 	fields := make([]FieldSummary, 0, len(fieldMap))
 	for field, records := range fieldMap {
 		// Определяем общий action для поля
@@ -111,13 +118,16 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 			Changes:    uint64(len(records)),
 			DetailLink: "details/" + detailFileName, // относительный путь от regress.html
 		})
+		bar.Add(1)
 	}
+	cancelBar()
+
 	// Сортируем поля по имени
 	sort.Slice(fields, func(i, j int) bool {
 		return fields[i].Field < fields[j].Field
 	})
 
-	// 4. Считаем общую статистику
+	// Считаем общую статистику
 	var changedFiles uint
 	for _, comparison := range comparisons {
 		if comparison.ExistsInBoth() && len(comparison.Differences) > 0 {
@@ -125,7 +135,7 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		}
 	}
 
-	// 5. Генерируем главную страницу
+	// Генерируем главную страницу
 	data := Report{
 		TotalFiles:   uint(len(comparisons)),
 		ChangedFiles: changedFiles,

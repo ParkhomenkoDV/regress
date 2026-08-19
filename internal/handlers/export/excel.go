@@ -1,8 +1,11 @@
 package export
 
 import (
+	"context"
 	"regress/internal/shared"
+	"time"
 
+	"github.com/ParkhomenkoDV/progress"
 	excel "github.com/xuri/excelize/v2"
 )
 
@@ -34,6 +37,9 @@ func Excel(comparisons []shared.Comparison, fileName string) error {
 		cell, _ := excel.CoordinatesToCellName(col+1, 1)
 		f.SetCellValue("Sheet1", cell, header)
 	}
+
+	bar := progress.New(time.Second, "♻️ Excel:", 50, uint64(len(comparisons)), true, true, false)
+	cancelBar := bar.Start(context.Background())
 
 	// Записываем данные
 	for row, comparison := range comparisons {
@@ -73,7 +79,10 @@ func Excel(comparisons []shared.Comparison, fileName string) error {
 				col += 2
 			}
 		}
+		bar.Add(1)
 	}
+	cancelBar()
+
 	// Настраиваем ширину колонок для лучшего отображения
 	for i := 1; i <= len(headers); i++ {
 		f.SetColWidth("Sheet1", string(rune('A'+i-1)), string(rune('A'+i-1)), 20)

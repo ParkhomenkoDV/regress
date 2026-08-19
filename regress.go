@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path"
 	"regress/internal/config"
 	"regress/internal/handlers/compare"
 	"regress/internal/handlers/export"
 	"regress/internal/handlers/filter"
 	"regress/internal/handlers/read"
 	"regress/internal/shared"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -30,7 +32,7 @@ func main() {
 		}
 	}()
 
-	fmt.Printf("[%v] Чтение конфигурации...\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Чтение конфигурации...\n", time.Now().Format(time.DateTime))
 
 	cfg, err := config.New()
 	if err != nil {
@@ -38,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("[%v] Поиск файлов для сравнения...\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Поиск файлов для сравнения...\n", time.Now().Format(time.DateTime))
 
 	befores, err := read.JSONFiles(cfg.Before)
 	if err != nil {
@@ -51,16 +53,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("[%v] Регресс...\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Регресс...\n", time.Now().Format(time.DateTime))
 
 	// Запускаем обработку
 	comparisons := compare.JSONs(ctx, befores, afters, cfg.Workers)
 
-	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format("2006-01-02 15:04:05"), countChanged(comparisons), len(comparisons))
+	fmt.Printf("[%v] Файлов с изменениями/всего: %d/%d\n", time.Now().Format(time.DateTime), countChanged(comparisons), len(comparisons))
 
-	fmt.Printf("[%v] Экспорт в html...\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Экспорт в html...\n", time.Now().Format(time.DateTime))
 
-	err = export.HTML(comparisons, "comparison")
+	folder := fmt.Sprintf("comparison_%s_%s_%s", path.Base(cfg.Before), path.Base(cfg.After), strings.ReplaceAll(time.Now().Format(time.DateTime), ":", "-"))
+
+	err = export.HTML(comparisons, folder)
 	if err != nil {
 		fmt.Printf("ошибка экспорта в html: %v", err)
 		return
@@ -70,15 +74,15 @@ func main() {
 		comparisons = filter.Diff(comparisons)
 	}
 
-	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Экспорт в excel...\n", time.Now().Format(time.DateTime))
 
-	err = export.Excel(comparisons, "comparison.xlsx")
+	err = export.Excel(comparisons, path.Join(folder, "comparison.xlsx"))
 	if err != nil {
 		fmt.Printf("ошибка экспорта в excel: %v", err)
 		return
 	}
 
-	fmt.Printf("[%v] Готово!\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Printf("[%v] Готово!\n", time.Now().Format(time.DateTime))
 }
 
 func countChanged(comparisons []shared.Comparison) int {

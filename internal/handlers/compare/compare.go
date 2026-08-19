@@ -50,7 +50,7 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 	}
 	close(tasks) // Закрываем смену
 
-	bar := progress.New(time.Second, "Comparing:", 50, uint64(len(allFiles)), true, true, false)
+	bar := progress.New(time.Second, "🕵️‍♂️ Comparing:", 50, uint64(len(allFiles)), true, true, false)
 	cancelBar := bar.Start(context.Background())
 
 	var wg sync.WaitGroup // Счётчик рабочих
