@@ -93,7 +93,7 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		}
 	}
 
-	bar := progress.New(time.Second, "🧾 HTML:", 50, uint64(len(comparisons)), true, true, false)
+	bar := progress.New(time.Second, "🧾 HTML:", 50, uint64(len(fieldMap)), true, true, false)
 	cancelBar := bar.Start(context.Background())
 
 	// Преобразуем в срез для главной страницы и генерируем файлы полей
