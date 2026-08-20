@@ -79,8 +79,8 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 			missing = append(missing, Missing{FileName: comparison.FileName, Side: side})
 			continue
 		}
-		if len(comparison.Differences) == 0 {
-			continue // нет изменений
+		if len(comparison.Differences) == 0 { // нет изменений
+			continue
 		}
 		for _, diff := range comparison.Differences {
 			action := determineAction(diff.Before, diff.After)
@@ -120,6 +120,7 @@ func HTML(comparisons []shared.Comparison, folderName string) error {
 		})
 		bar.Add(1)
 	}
+
 	cancelBar()
 
 	// Сортируем поля по имени
