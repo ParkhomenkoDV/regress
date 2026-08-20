@@ -41,25 +41,30 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 		}
 	}
 
-	tasks := make(chan task, len(allFiles))     // канал задач
-	results := make(chan result, len(allFiles)) // канал результатов
+	tasks := make(chan task, len(allFiles)) // канал задач
 
 	// Заполняем очередь задач
-	for _, t := range allFiles {
-		tasks <- t
-	}
-	close(tasks) // Закрываем смену
+	go func() {
+		defer close(tasks) // Закрываем смену
+
+		for _, t := range allFiles {
+			tasks <- t
+		}
+	}()
 
 	bar := progress.New(time.Second, "🕵️‍♂️ Comparing:", 50, uint64(len(allFiles)), true, true, false)
 	cancelBar := bar.Start(context.Background())
 
-	var wg sync.WaitGroup // Счётчик рабочих
+	var wg sync.WaitGroup                       // Счётчик рабочих
+	results := make(chan result, len(allFiles)) // канал результатов
+
 	// Запускаем рабочих
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go work(i, &wg,
-			ctx, bar,
-			tasks, results)
+		wg.Go(func() {
+			work(i,
+				ctx, bar,
+				tasks, results)
+		})
 	}
 
 	// Ждём окончания смены
@@ -94,12 +99,11 @@ func JSONs(ctx context.Context, filesBefore, filesAfter map[string]string, worke
 }
 
 func work(
-	i int, wg *sync.WaitGroup,
+	i int,
 	ctx context.Context,
 	bar *progress.Bar,
 	tasks <-chan task, results chan<- result,
 ) {
-	defer wg.Done()
 
 	for t := range tasks {
 		select {
